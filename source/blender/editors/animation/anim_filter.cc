@@ -1594,7 +1594,7 @@ static size_t animfilter_action_slot(bAnimContext *ac,
   const bool visible_only = (filter_mode & ANIMFILTER_LIST_VISIBLE);
   const bool expansion_is_ok = !visible_only || !show_slot_channel || slot.is_expanded();
 
-  animrig::ChannelBag *channel_bag = animrig::channelbag_for_action_slot(action, slot.handle);
+  animrig::Channelbag *channel_bag = animrig::channelbag_for_action_slot(action, slot.handle);
   if (channel_bag == nullptr) {
     return items;
   }

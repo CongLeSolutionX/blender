@@ -42,6 +42,7 @@
 
 /* NOTE: Keep sorted! */
 
+DNA_STRUCT_RENAME(ActionChannelbag, ActionChannelbag)
 DNA_STRUCT_RENAME(Lamp, Light)
 DNA_STRUCT_RENAME(SeqRetimingHandle, SeqRetimingKey)
 DNA_STRUCT_RENAME(SpaceButs, SpaceProperties)

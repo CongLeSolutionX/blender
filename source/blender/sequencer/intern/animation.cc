@@ -100,7 +100,7 @@ void SEQ_animation_backup_original(Scene *scene, SeqAnimationBackup *backup)
     if (action.is_action_legacy()) {
       BLI_movelisttolist(&backup->curves, &scene->adt->action->curves);
     }
-    else if (animrig::ChannelBag *channel_bag = animrig::channelbag_for_action_slot(
+    else if (animrig::Channelbag *channel_bag = animrig::channelbag_for_action_slot(
                  action, scene->adt->slot_handle))
     {
       animrig::channelbag_fcurves_move(backup->channel_bag, *channel_bag);
@@ -125,7 +125,7 @@ void SEQ_animation_restore_original(Scene *scene, SeqAnimationBackup *backup)
       BLI_movelisttolist(&scene->adt->action->curves, &backup->curves);
     }
     else {
-      animrig::ChannelBag *channel_bag = animrig::channelbag_for_action_slot(
+      animrig::Channelbag *channel_bag = animrig::channelbag_for_action_slot(
           action, scene->adt->slot_handle);
       /* The channel bag should exist if we got here, because otherwise the
        * backup channel bag would have been empty. */

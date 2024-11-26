@@ -1236,7 +1236,7 @@ void action_group_to_keylist(AnimData *adt,
   }
 
   /* Layered actions. */
-  animrig::ChannelBag &channel_bag = agrp->channel_bag->wrap();
+  animrig::Channelbag &channel_bag = agrp->channel_bag->wrap();
   Span<FCurve *> fcurves = channel_bag.fcurves().slice(agrp->fcurve_range_start,
                                                        agrp->fcurve_range_length);
   for (FCurve *fcurve : fcurves) {

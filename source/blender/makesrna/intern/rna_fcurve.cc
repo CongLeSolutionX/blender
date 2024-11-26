@@ -677,7 +677,7 @@ static void rna_FCurve_group_set(PointerRNA *ptr, PointerRNA value, ReportList *
   bActionGroup *group = static_cast<bActionGroup *>(value.data);
 
   BLI_assert(group->channel_bag != nullptr);
-  blender::animrig::ChannelBag &channel_bag = group->channel_bag->wrap();
+  blender::animrig::Channelbag &channel_bag = group->channel_bag->wrap();
 
   if (!channel_bag.fcurve_assign_to_channel_group(*fcu, *group)) {
     printf(

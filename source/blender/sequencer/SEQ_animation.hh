@@ -32,7 +32,7 @@ struct SeqAnimationBackup {
    * legacy and layered actions, respectively. Therefore only one or the other
    * should ever have data stored in them, never both. */
   ListBase curves;
-  blender::animrig::ChannelBag channel_bag;
+  blender::animrig::Channelbag channel_bag;
 
   ListBase drivers;
 };

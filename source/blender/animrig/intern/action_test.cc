@@ -338,16 +338,16 @@ TEST_F(ActionLayersTest, slot_remove)
     EXPECT_FALSE(action->slot_remove(slot));
   }
 
-  { /* Removing a slot should remove its ChannelBag. */
+  { /* Removing a slot should remove its Channelbag. */
     Slot &slot = action->slot_add();
     const slot_handle_t slot_handle = slot.handle;
     EXPECT_EQ(2, slot.handle);
     EXPECT_EQ(2, action->last_slot_handle);
 
-    /* Create an F-Curve in a ChannelBag for the slot. */
+    /* Create an F-Curve in a Channelbag for the slot. */
     action->layer_keystrip_ensure();
     StripKeyframeData &strip_data = action->layer(0)->strip(0)->data<StripKeyframeData>(*action);
-    ChannelBag &channelbag = strip_data.channelbag_for_slot_ensure(slot);
+    Channelbag &channelbag = strip_data.channelbag_for_slot_ensure(slot);
     channelbag.fcurve_create_unique(bmain, {"location", 1});
 
     /* Remove the slot. */
@@ -357,7 +357,7 @@ TEST_F(ActionLayersTest, slot_remove)
     EXPECT_EQ(0, action->slot_array_num);
 
     /* Check that its channelbag is gone. */
-    ChannelBag *found_cbag = strip_data.channelbag_for_slot(slot_handle);
+    Channelbag *found_cbag = strip_data.channelbag_for_slot(slot_handle);
     EXPECT_EQ(found_cbag, nullptr);
   }
 
@@ -750,7 +750,7 @@ TEST_F(ActionLayersTest, KeyframeStrip__keyframe_insert)
 
   /* Check the strip was created correctly, with the channels for the slot. */
   ASSERT_EQ(1, strip_data.channelbags().size());
-  ChannelBag *channels = strip_data.channelbag(0);
+  Channelbag *channels = strip_data.channelbag(0);
   EXPECT_EQ(slot.handle, channels->slot_handle);
 
   /* Insert a second key, should insert into the same FCurve as before. */
@@ -896,7 +896,7 @@ TEST_F(ActionLayersTest, conversion_to_layered)
   EXPECT_STREQ(converted->id.name, "ACACÄnimåtië_layered");
   Strip *strip = converted->layer(0)->strip(0);
   StripKeyframeData &strip_data = strip->data<StripKeyframeData>(*converted);
-  ChannelBag *bag = strip_data.channelbag(0);
+  Channelbag *bag = strip_data.channelbag(0);
   ASSERT_EQ(bag->fcurve_array_num, 2);
   ASSERT_EQ(bag->fcurve_array[0]->totvert, 2);
 
@@ -939,7 +939,7 @@ TEST_F(ActionLayersTest, conversion_to_layered_action_groups)
   Action *converted = convert_to_layered_action(*bmain, *action);
   Strip *strip = converted->layer(0)->strip(0);
   StripKeyframeData &strip_data = strip->data<StripKeyframeData>(*converted);
-  ChannelBag *bag = strip_data.channelbag(0);
+  Channelbag *bag = strip_data.channelbag(0);
 
   ASSERT_EQ(BLI_listbase_count(&converted->groups), 0);
   ASSERT_EQ(bag->channel_groups().size(), 4);
@@ -1010,8 +1010,8 @@ TEST_F(ActionLayersTest, action_move_slot)
   ASSERT_EQ(strip_data_1.channelbag_array_num, 1);
   ASSERT_EQ(strip_data_2.channelbag_array_num, 1);
 
-  ChannelBag *bag_1 = strip_data_1.channelbag(0);
-  ChannelBag *bag_2 = strip_data_2.channelbag(0);
+  Channelbag *bag_1 = strip_data_1.channelbag(0);
+  Channelbag *bag_2 = strip_data_2.channelbag(0);
 
   ASSERT_EQ(bag_1->fcurve_array_num, 2);
   ASSERT_EQ(bag_2->fcurve_array_num, 2);
@@ -1061,7 +1061,7 @@ static void add_fcurve_to_action(Action &action, FCurve &fcu)
   Slot &slot = action.slot_array_num > 0 ? *action.slot(0) : action.slot_add();
   action.layer_keystrip_ensure();
   StripKeyframeData &strip_data = action.layer(0)->strip(0)->data<StripKeyframeData>(action);
-  ChannelBag &cbag = strip_data.channelbag_for_slot_ensure(slot);
+  Channelbag &cbag = strip_data.channelbag_for_slot_ensure(slot);
   cbag.fcurve_append(fcu);
 }
 
@@ -1159,9 +1159,9 @@ TEST_F(ActionQueryTest, BKE_action_frame_range_calc)
 
 /*-----------------------------------------------------------*/
 
-class ChannelBagTest : public testing::Test {
+class ChannelbagTest : public testing::Test {
  public:
-  ChannelBag *channel_bag;
+  Channelbag *channel_bag;
 
   static void SetUpTestSuite() {}
 
@@ -1169,7 +1169,7 @@ class ChannelBagTest : public testing::Test {
 
   void SetUp() override
   {
-    channel_bag = new ChannelBag();
+    channel_bag = new Channelbag();
   }
 
   void TearDown() override
@@ -1178,7 +1178,7 @@ class ChannelBagTest : public testing::Test {
   }
 };
 
-TEST_F(ChannelBagTest, fcurve_move)
+TEST_F(ChannelbagTest, fcurve_move)
 {
   FCurve &fcu0 = channel_bag->fcurve_ensure(nullptr, {"fcu0", 0, std::nullopt, "group0"});
   FCurve &fcu1 = channel_bag->fcurve_ensure(nullptr, {"fcu1", 0, std::nullopt, "group0"});
@@ -1257,7 +1257,7 @@ TEST_F(ChannelBagTest, fcurve_move)
   EXPECT_EQ(nullptr, fcu1.grp);
 }
 
-TEST_F(ChannelBagTest, channel_group_create)
+TEST_F(ChannelbagTest, channel_group_create)
 {
   ASSERT_TRUE(channel_bag->channel_groups().is_empty());
 
@@ -1292,7 +1292,7 @@ TEST_F(ChannelBagTest, channel_group_create)
   EXPECT_EQ(&group2, channel_bag->channel_group(2));
 }
 
-TEST_F(ChannelBagTest, channel_group_remove)
+TEST_F(ChannelbagTest, channel_group_remove)
 {
   bActionGroup &group0 = channel_bag->channel_group_create("Group0");
   bActionGroup &group1 = channel_bag->channel_group_create("Group1");
@@ -1378,7 +1378,7 @@ TEST_F(ChannelBagTest, channel_group_remove)
   EXPECT_EQ(nullptr, fcu4.grp);
 }
 
-TEST_F(ChannelBagTest, channel_group_find)
+TEST_F(ChannelbagTest, channel_group_find)
 {
   bActionGroup &group0a = channel_bag->channel_group_create("Foo");
   bActionGroup &group1a = channel_bag->channel_group_create("Bar");
@@ -1395,7 +1395,7 @@ TEST_F(ChannelBagTest, channel_group_find)
   EXPECT_EQ(nullptr, channel_bag->channel_group_find("Wat"));
 }
 
-TEST_F(ChannelBagTest, channel_group_ensure)
+TEST_F(ChannelbagTest, channel_group_ensure)
 {
   bActionGroup &group0 = channel_bag->channel_group_create("Foo");
   bActionGroup &group1 = channel_bag->channel_group_create("Bar");
@@ -1412,7 +1412,7 @@ TEST_F(ChannelBagTest, channel_group_ensure)
   EXPECT_EQ(&group2, channel_bag->channel_group(2));
 }
 
-TEST_F(ChannelBagTest, channel_group_fcurve_creation)
+TEST_F(ChannelbagTest, channel_group_fcurve_creation)
 {
   FCurve &fcu0 = channel_bag->fcurve_ensure(nullptr, {"fcu0", 0, std::nullopt, std::nullopt});
   EXPECT_EQ(1, channel_bag->fcurves().size());
@@ -1503,7 +1503,7 @@ TEST_F(ChannelBagTest, channel_group_fcurve_creation)
   EXPECT_EQ(2, group1.fcurve_range_length);
 }
 
-TEST_F(ChannelBagTest, channel_group_fcurve_removal)
+TEST_F(ChannelbagTest, channel_group_fcurve_removal)
 {
   FCurve &fcu0 = channel_bag->fcurve_ensure(nullptr, {"fcu0", 0, std::nullopt, "group0"});
   FCurve &fcu1 = channel_bag->fcurve_ensure(nullptr, {"fcu1", 0, std::nullopt, "group0"});
@@ -1576,7 +1576,7 @@ TEST_F(ChannelBagTest, channel_group_fcurve_removal)
   ASSERT_EQ(0, channel_bag->channel_groups().size());
 }
 
-TEST_F(ChannelBagTest, channel_group_move)
+TEST_F(ChannelbagTest, channel_group_move)
 {
   FCurve &fcu0 = channel_bag->fcurve_ensure(nullptr, {"fcu0", 0, std::nullopt, "group0"});
   FCurve &fcu1 = channel_bag->fcurve_ensure(nullptr, {"fcu1", 0, std::nullopt, "group1"});
@@ -1655,7 +1655,7 @@ TEST_F(ChannelBagTest, channel_group_move)
   EXPECT_EQ(nullptr, fcu4.grp);
 }
 
-TEST_F(ChannelBagTest, channel_group_move_fcurve_into)
+TEST_F(ChannelbagTest, channel_group_move_fcurve_into)
 {
   FCurve &fcu0 = channel_bag->fcurve_ensure(nullptr, {"fcu0", 0, std::nullopt, std::nullopt});
   FCurve &fcu1 = channel_bag->fcurve_ensure(nullptr, {"fcu1", 0, std::nullopt, std::nullopt});
@@ -1721,7 +1721,7 @@ TEST_F(ChannelBagTest, channel_group_move_fcurve_into)
   EXPECT_EQ(2, group1.fcurve_range_length);
 }
 
-TEST_F(ChannelBagTest, channel_group_fcurve_ungroup)
+TEST_F(ChannelbagTest, channel_group_fcurve_ungroup)
 {
   FCurve &fcu0 = channel_bag->fcurve_ensure(nullptr, {"fcu0", 0, std::nullopt, "group0"});
   FCurve &fcu1 = channel_bag->fcurve_ensure(nullptr, {"fcu1", 0, std::nullopt, "group0"});
@@ -1886,7 +1886,7 @@ TEST_F(ActionFCurveMoveTest, test_fcurve_move_layered)
   action_src.layer_keystrip_ensure();
   StripKeyframeData &strip_data_src = action_src.layer(0)->strip(0)->data<StripKeyframeData>(
       action_src);
-  ChannelBag &cbag_src = strip_data_src.channelbag_for_slot_ensure(slot_src);
+  Channelbag &cbag_src = strip_data_src.channelbag_for_slot_ensure(slot_src);
 
   cbag_src.fcurve_ensure(this->bmain, {"source_prop", 0});
   FCurve &fcurve_to_move = cbag_src.fcurve_ensure(this->bmain, {"source_prop", 2});
@@ -1898,7 +1898,7 @@ TEST_F(ActionFCurveMoveTest, test_fcurve_move_layered)
   action_dst.layer_keystrip_ensure();
   StripKeyframeData &strip_data_dst = action_dst.layer(0)->strip(0)->data<StripKeyframeData>(
       action_dst);
-  ChannelBag &cbag_dst = strip_data_dst.channelbag_for_slot_ensure(slot_dst);
+  Channelbag &cbag_dst = strip_data_dst.channelbag_for_slot_ensure(slot_dst);
 
   cbag_dst.fcurve_ensure(this->bmain, {"dest_prop", 0});
 
