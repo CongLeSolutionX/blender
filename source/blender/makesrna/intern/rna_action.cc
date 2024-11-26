@@ -182,10 +182,9 @@ static void rna_ActionSlots_active_set(PointerRNA *ptr,
 static ActionSlot *rna_Action_slots_new(bAction *dna_action,
                                         bContext *C,
                                         ReportList *reports,
-                                        ID *id_for_slot)
+                                        int type)
 {
   animrig::Action &action = dna_action->wrap();
-  animrig::Slot *slot;
 
   if (!action.is_action_layered()) {
     BKE_reportf(reports,
@@ -195,12 +194,7 @@ static ActionSlot *rna_Action_slots_new(bAction *dna_action,
     return nullptr;
   }
 
-  if (id_for_slot) {
-    slot = &action.slot_add_for_id(*id_for_slot);
-  }
-  else {
-    slot = &action.slot_add();
-  }
+  animrig::Slot *slot = &action.slot_add_for_id_type(ID_Type(type));
 
   WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, nullptr);
   return slot;
@@ -1900,16 +1894,16 @@ static void rna_def_action_slots(BlenderRNA *brna, PropertyRNA *cprop)
   func = RNA_def_function(srna, "new", "rna_Action_slots_new");
   RNA_def_function_ui_description(func, "Add a slot to the Action");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
-  parm = RNA_def_pointer(
+  parm = RNA_def_enum(
       func,
-      "for_id",
-      "ID",
-      "Data-Block",
-      "If given, the new slot will be named after this data-block, and limited to animating "
-      "data-blocks of its type. If ommitted, limiting the ID type will happen as soon as the "
-      "slot is assigned.");
-  /* Clear out the PARM_REQUIRED flag, which is set by default for pointer parameters. */
-  RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
+      "type",
+      rna_enum_id_type_items,
+      ID_OB,
+      "Data-block Type",
+      "The data-block type that the slot is intended for.  This is combined with the slot name to "
+      "create the slot's unique identifier, and is also used to limit (on a best-effort basis) "
+      "which data-blocks the slot can be assigned to.");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
   parm = RNA_def_pointer(func, "slot", "ActionSlot", "", "Newly created action slot");
   RNA_def_function_return(func, parm);

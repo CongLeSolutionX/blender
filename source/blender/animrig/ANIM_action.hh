@@ -191,6 +191,13 @@ class Action : public ::bAction {
   Slot &slot_add();
 
   /**
+   * Create a new, unused Slot for the given ID type.
+   *
+   * The returned slot will only be suitable for the specified ID type.
+   */
+  Slot &slot_add_for_id_type(ID_Type idtype);
+
+  /**
    * Create a new slot, named after the given ID, and limited to the ID's type.
    *
    * Note that this assigns neither this Action nor the new Slot to the ID. This function

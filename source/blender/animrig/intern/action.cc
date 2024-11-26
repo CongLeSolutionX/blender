@@ -498,6 +498,21 @@ Slot &Action::slot_add()
   return slot;
 }
 
+Slot &Action::slot_add_for_id_type(const ID_Type idtype)
+{
+  Slot &slot = this->slot_add();
+
+  BLI_strncpy_utf8(slot.identifier + 2, DATA_(slot_default_name), ARRAY_SIZE(slot.identifier) - 2);
+  slot.idtype = idtype;
+  slot.identifier_ensure_prefix();
+  slot_identifier_ensure_unique(*this, slot);
+
+  /* No need to call anim.slot_identifier_propagate() as nothing will be using
+   * this brand new Slot yet. */
+
+  return slot;
+}
+
 Slot &Action::slot_add_for_id(const ID &animated_id)
 {
   Slot &slot = this->slot_add();
