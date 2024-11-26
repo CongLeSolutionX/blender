@@ -7429,7 +7429,6 @@ GroupedSpan<int> calc_vert_neighbors_interior(const OffsetIndices<int> faces,
 
   for (const int i : verts.index_range()) {
     const int vert = verts[i];
-    const bool boundary = boundary_verts[vert];
 
     const int vert_start = r_data.size();
     r_offset_data[i] = vert_start;
@@ -7439,14 +7438,8 @@ GroupedSpan<int> calc_vert_neighbors_interior(const OffsetIndices<int> faces,
       }
       const int2 neighbors = bke::mesh::face_find_adjacent_verts(faces[face], corner_verts, vert);
       for (const int neighbor : {neighbors[0], neighbors[1]}) {
-        for (int other = r_data.size() - 1; other >= vert_start; other--) {
-          if (r_data[other] == neighbor) {
-            continue;
-          }
-        }
-        if (boundary) {
-          if (boundary_verts[neighbor]) {
-            /* Only include other boundary vertices as neighbors of boundary vertices. */
+        for (int neighbor_i = r_data.size() - 1; neighbor_i >= vert_start; neighbor_i--) {
+          if (r_data[neighbor_i] == neighbor) {
             continue;
           }
         }
@@ -7454,9 +7447,19 @@ GroupedSpan<int> calc_vert_neighbors_interior(const OffsetIndices<int> faces,
       }
     }
 
-    if (boundary) {
+    if (boundary_verts[vert]) {
       /* Do not include neighbors of corner vertices. */
-      r_data.resize(vert_start);
+      if (r_data.size() == vert_start + 2) {
+        r_data.resize(vert_start);
+      }
+      else {
+        /* Only include other boundary vertices as neighbors of boundary vertices. */
+        for (int neighbor_i = r_data.size() - 1; neighbor_i >= vert_start; neighbor_i--) {
+          if (!boundary_verts[r_data[neighbor_i]]) {
+            r_data.remove_and_reorder(neighbor_i);
+          }
+        }
+      }
     }
   }
   r_offset_data.last() = r_data.size();
