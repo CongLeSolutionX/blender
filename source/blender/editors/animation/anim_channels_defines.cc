@@ -1416,7 +1416,7 @@ static void acf_action_slot_name(bAnimListElem *ale, char *r_name)
 
   BLI_assert(ale->bmain);
   const int num_users = slot->users(*ale->bmain).size();
-  const char *display_name = slot->name_without_prefix().c_str();
+  const char *display_name = slot->identifier_without_prefix().c_str();
 
   BLI_assert(num_users >= 0);
   switch (num_users) {
@@ -3987,7 +3987,7 @@ static bAnimChannelType ACF_GPL = {
     /*channel_role*/ ACHANNEL_ROLE_CHANNEL,
 
     /*get_backdrop_color*/ acf_generic_channel_color,
-    /*get_channel_color*/ acf_gpl_channel_color,
+    /*get_channel_color*/ nullptr,
     /*draw_backdrop*/ acf_generic_channel_backdrop,
     /*get_indent_level*/ acf_generic_indentation_flexible,
     /*get_offset*/ greasepencil::layer_offset,
@@ -5894,7 +5894,7 @@ void ANIM_channel_draw_widgets(const bContext *C,
 
   /* step 4) draw text - check if renaming widget is in use... */
   if (is_being_renamed) {
-    PointerRNA ptr = {nullptr};
+    PointerRNA ptr = {};
     PropertyRNA *prop = nullptr;
 
     /* draw renaming widget if we can get RNA pointer for it
