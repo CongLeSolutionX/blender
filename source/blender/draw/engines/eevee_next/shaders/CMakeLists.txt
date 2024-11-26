@@ -164,25 +164,25 @@ set(SRC_GLSL_LIB
 # eevee_ambient_occlusion_lib.glsl
 # eevee_attributes_lib.glsl
 # eevee_bxdf_diffuse_lib.glsl
-# eevee_bxdf_lib.glsl
+eevee_bxdf_lib.glsl
 # eevee_bxdf_microfacet_lib.glsl
 # eevee_bxdf_oren_nayar_lib.glsl
 # eevee_bxdf_sampling_lib.glsl
 # eevee_camera_lib.glsl
 # eevee_closure_lib.glsl
-# eevee_colorspace_lib.glsl
+eevee_colorspace_lib.glsl
 # eevee_cryptomatte_lib.glsl
 # eevee_depth_of_field_accumulator_lib.glsl
 # eevee_depth_of_field_lib.glsl
 # eevee_film_lib.glsl
-# eevee_filter_lib.glsl
+eevee_filter_lib.glsl
 # eevee_forward_lib.glsl
 # eevee_gbuffer_lib.glsl
 # eevee_horizon_scan_eval_lib.glsl
 # eevee_horizon_scan_lib.glsl
 # eevee_light_eval_lib.glsl
 # eevee_light_iter_lib.glsl
-# eevee_light_lib.glsl
+eevee_light_lib.glsl
 # eevee_lightprobe_eval_lib.glsl
 # eevee_lightprobe_lib.glsl
 # eevee_lightprobe_sphere_eval_lib.glsl

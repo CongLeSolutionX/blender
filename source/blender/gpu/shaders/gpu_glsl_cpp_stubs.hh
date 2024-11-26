@@ -296,6 +296,7 @@ template<> struct VecBase<bool, 4> : VecSwizzle4<bool> {
 
 using uint = unsigned int;
 using uint32_t = unsigned int; /* For typed enums. */
+using uchar = unsigned char;
 
 using float2 = VecBase<double, 2>;
 using float3 = VecBase<double, 3>;
@@ -348,6 +349,17 @@ using BOOL = bool;
 using BVEC2 = bool2;
 using BVEC3 = bool3;
 using BVEC4 = bool4;
+
+/** Packed types are needed for MSL which have different alignment rules for float3. */
+using packed_float2 = float2;
+using packed_float3 = float3;
+using packed_float4 = float4;
+using packed_int2 = int2;
+using packed_int3 = int3;
+using packed_int4 = int4;
+using packed_uint2 = uint2;
+using packed_uint3 = uint3;
+using packed_uint4 = uint4;
 
 /** \} */
 
