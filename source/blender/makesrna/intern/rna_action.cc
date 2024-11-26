@@ -1912,7 +1912,8 @@ static void rna_def_action_slots(BlenderRNA *brna, PropertyRNA *cprop)
       func,
       "name",
       nullptr,
-      sizeof(ActionSlot::identifier) - 3,
+      /* Minus 2 for the ID-type prefix. */
+      sizeof(ActionSlot::identifier) - 2,
       "Name",
       "Name of the slot. This will be made unique within the Action among slots of the same type");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
