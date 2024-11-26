@@ -1220,7 +1220,7 @@ typedef struct AnimData {
 /* Some static assertions that things that should have the same type actually do. */
 static_assert(std::is_same_v<decltype(ActionSlot::handle), decltype(AnimData::slot_handle)>);
 static_assert(
-    std::is_same_v<decltype(ActionSlot::name), decltype(AnimData::last_slot_identifier)>);
+    std::is_same_v<decltype(ActionSlot::identifier), decltype(AnimData::last_slot_identifier)>);
 #endif
 
 /* Animation Data settings (mostly for NLA) */
