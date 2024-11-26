@@ -1356,17 +1356,9 @@ static bool write_file_handle(Main *mainvar,
    * avoid thumbnail detecting changes because of this. */
   mywrite_flush(wd);
 
-  OverrideLibraryStorage *override_storage = wd->use_memfile ?
-                                                 nullptr :
-                                                 BKE_lib_override_library_operations_store_init();
-
-  /* This outer loop allows to save first data-blocks from real mainvar,
-   * then the temp ones from override process,
-   * if needed, without duplicating whole code. */
-  Main *bmain = mainvar;
-  do {
+  {
     ListBase *lbarray[INDEX_ID_MAX];
-    int a = set_listbasepointers(bmain, lbarray);
+    int a = set_listbasepointers(mainvar, lbarray);
     while (a--) {
       ID *id = static_cast<ID *>(lbarray[a]->first);
 
@@ -1425,17 +1417,16 @@ static bool write_file_handle(Main *mainvar,
 
         /* If not writing undo data, properly set directly linked IDs as `ID_TAG_EXTERN`. */
         if (!wd->use_memfile) {
-          BKE_library_foreach_ID_link(bmain,
+          BKE_library_foreach_ID_link(mainvar,
                                       id,
                                       write_id_direct_linked_data_process_cb,
                                       nullptr,
                                       IDWALK_READONLY | IDWALK_INCLUDE_UI);
         }
 
-        const bool do_override = !ELEM(override_storage, nullptr, bmain) &&
-                                 ID_IS_OVERRIDE_LIBRARY_REAL(id);
-        if (do_override) {
-          BKE_lib_override_library_operations_store(bmain, override_storage, id);
+        if (ID_IS_OVERRIDE_LIBRARY_REAL(id) && !ID_IS_OVERRIDE_LIBRARY_VIRTUAL(id)) {
+          /* Forcefully ensure we know about all needed override operations. */
+          BKE_lib_override_library_operations_create(mainvar, id, nullptr);
         }
 
         mywrite_id_begin(wd, id);
@@ -1450,11 +1441,6 @@ static bool write_file_handle(Main *mainvar,
 
       mywrite_flush(wd);
     }
-  } while ((bmain != override_storage) && (bmain = override_storage));
-
-  if (override_storage) {
-    BKE_lib_override_library_operations_store_finalize(override_storage);
-    override_storage = nullptr;
   }
 
   /* Special handling, operating over split Mains... */
