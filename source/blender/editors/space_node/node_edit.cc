@@ -983,7 +983,10 @@ static int node_resize_modal(bContext *C, wmOperator *op, const wmEvent *event)
   bNode *node = bke::node_get_active(snode->edittree);
   NodeSizeWidget *nsw = (NodeSizeWidget *)op->customdata;
 
-  const bool snap_to_grid = scene->toolsettings->snap_flag_node;
+  bool snap_to_grid = scene->toolsettings->snap_flag_node;
+  if (event->modifier & KM_CTRL) {
+    snap_to_grid = !snap_to_grid;
+  }
 
   switch (event->type) {
     case MOUSEMOVE: {
