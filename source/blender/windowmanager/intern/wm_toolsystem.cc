@@ -425,8 +425,6 @@ static void toolsystem_brush_activate_from_toolref(const bContext *C,
     }
   }
   else if (tref->space_type == SPACE_IMAGE) {
-    /* TODO: For some reason the Texture Paint tools have mode == CTX_MODE_EDIT_CURVE, figure
-     * out why this is and fix it so this can not use string comparisons. */
     if (tref->mode == SI_MODE_PAINT) {
       toolsystem_brush_activate_from_toolref_for_object_paint(C, workspace, tref);
     }
