@@ -32,11 +32,13 @@
 #include "BKE_keyconfig.h"
 #include "BKE_main.hh"
 #include "BKE_preferences.h"
+#include "BLI_map.hh"
 
 #include "BLO_readfile.hh"
 #include "BLO_userdef_default.h"
 
 #include "BLT_translation.hh"
+#include "DNA_brush_enums.h"
 
 #include "GPU_platform.hh"
 
@@ -44,7 +46,9 @@
 
 #include "readfile.hh" /* Own include. */
 
+#include "WM_keymap.hh"
 #include "WM_types.hh"
+#include "fmt/format.h"
 #include "wm_event_types.hh"
 
 /* Don't use translation strings in versioning!
@@ -295,6 +299,132 @@ static bool keymap_item_update_tweak_event(wmKeyMapItem *kmi, void * /*user_data
   }
   kmi->val = KM_CLICK_DRAG;
   return false;
+}
+
+static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
+{
+  static std::string asset_prefix = "brushes/essentials_brushes-mesh_sculpt.blend/Brush/";
+  static std::string new_op_name = "BRUSH_OT_asset_activate";
+
+  static auto tool_name_lookup = []() {
+    blender::Map<std::string, std::string> map;
+    map.add_new("builtin_brush.Draw", "Draw");
+    map.add_new("builtin_brush.Draw Sharp", "Draw Sharp");
+    map.add_new("builtin_brush.Clay", "Clay");
+    map.add_new("builtin_brush.Clay Strips", "Clay Strips");
+    map.add_new("builtin_brush.Clay Thumb", "Clay Thumb");
+    map.add_new("builtin_brush.Layer", "Layer");
+    map.add_new("builtin_brush.Inflate", "Inflate/Deflate");
+    map.add_new("builtin_brush.Blob", "Blob");
+    map.add_new("builtin_brush.Crease", "Crease Polish");
+    map.add_new("builtin_brush.Smooth", "Smooth");
+    map.add_new("builtin_brush.Flatten", "Flatten/Contrast");
+    map.add_new("builtin_brush.Fill", "Fill/Deepen");
+    map.add_new("builtin_brush.Scrape", "Scrape/Fill");
+    map.add_new("builtin_brush.Multi-plane Scrape", "Scrape Multiplane");
+    map.add_new("builtin_brush.Pinch", "Pinch/Magnify");
+    map.add_new("builtin_brush.Grab", "Grab");
+    map.add_new("builtin_brush.Elastic Deform", "Elastic Grab");
+    map.add_new("builtin_brush.Snake Hook", "Snake Hook");
+    map.add_new("builtin_brush.Thumb", "Thumb");
+    map.add_new("builtin_brush.Pose", "Pose");
+    map.add_new("builtin_brush.Nudge", "Nudge");
+    map.add_new("builtin_brush.Rotate", "Twist");
+    map.add_new("builtin_brush.Slide Relax", "Relax Slide");
+    map.add_new("builtin_brush.Boundary", "Boundary");
+    map.add_new("builtin_brush.Cloth", "Drag Cloth");
+    map.add_new("builtin_brush.Simplify", "Density");
+    map.add_new("builtin_brush.Mask", "Mask");
+    map.add_new("builtin_brush.Draw Face Sets", "Face Set Paint");
+    map.add_new("builtin_brush.Multires Displacement Eraser", "Erase Multires Displacement");
+    map.add_new("builtin_brush.Multires Displacement Smear", "Smear Multires Displacement");
+    map.add_new("builtin_brush.Paint", "Paint Hard");
+    map.add_new("builtin_brush.Smear", "Smear");
+    return map;
+  }();
+
+  static auto id_lookup = []() {
+    blender::Map<int, std::string> map;
+    map.add_new(SCULPT_BRUSH_TYPE_DRAW, "Draw");
+    map.add_new(SCULPT_BRUSH_TYPE_DRAW_SHARP, "Draw Sharp");
+    map.add_new(SCULPT_BRUSH_TYPE_CLAY, "Clay");
+    map.add_new(SCULPT_BRUSH_TYPE_CLAY_STRIPS, "Clay Strips");
+    map.add_new(SCULPT_BRUSH_TYPE_CLAY_THUMB, "Clay Thumb");
+    map.add_new(SCULPT_BRUSH_TYPE_LAYER, "Layer");
+    map.add_new(SCULPT_BRUSH_TYPE_INFLATE, "Inflate/Deflate");
+    map.add_new(SCULPT_BRUSH_TYPE_BLOB, "Blob");
+    map.add_new(SCULPT_BRUSH_TYPE_CREASE, "Crease Polish");
+    map.add_new(SCULPT_BRUSH_TYPE_SMOOTH, "Smooth");
+    map.add_new(SCULPT_BRUSH_TYPE_FLATTEN, "Flatten/Contrast");
+    map.add_new(SCULPT_BRUSH_TYPE_FILL, "Fill/Deepen");
+    map.add_new(SCULPT_BRUSH_TYPE_SCRAPE, "Scrape/Fill");
+    map.add_new(SCULPT_BRUSH_TYPE_MULTIPLANE_SCRAPE, "Scrape Multiplane");
+    map.add_new(SCULPT_BRUSH_TYPE_PINCH, "Pinch/Magnify");
+    map.add_new(SCULPT_BRUSH_TYPE_GRAB, "Grab");
+    map.add_new(SCULPT_BRUSH_TYPE_ELASTIC_DEFORM, "Elastic Grab");
+    map.add_new(SCULPT_BRUSH_TYPE_SNAKE_HOOK, "Snake Hook");
+    map.add_new(SCULPT_BRUSH_TYPE_THUMB, "Thumb");
+    map.add_new(SCULPT_BRUSH_TYPE_POSE, "Pose");
+    map.add_new(SCULPT_BRUSH_TYPE_NUDGE, "Nudge");
+    map.add_new(SCULPT_BRUSH_TYPE_ROTATE, "Twist");
+    map.add_new(SCULPT_BRUSH_TYPE_SLIDE_RELAX, "Relax Slide");
+    map.add_new(SCULPT_BRUSH_TYPE_BOUNDARY, "Boundary");
+    map.add_new(SCULPT_BRUSH_TYPE_CLOTH, "Drag Cloth");
+    map.add_new(SCULPT_BRUSH_TYPE_SIMPLIFY, "Density");
+    map.add_new(SCULPT_BRUSH_TYPE_MASK, "Mask");
+    map.add_new(SCULPT_BRUSH_TYPE_DRAW_FACE_SETS, "Face Set Paint");
+    map.add_new(SCULPT_BRUSH_TYPE_DISPLACEMENT_ERASER, "Erase Multires Displacement");
+    map.add_new(SCULPT_BRUSH_TYPE_DISPLACEMENT_SMEAR, "Smear Multires Displacement");
+    map.add_new(SCULPT_BRUSH_TYPE_PAINT, "Paint Hard");
+    map.add_new(SCULPT_BRUSH_TYPE_SMEAR, "Smear");
+    return map;
+  }();
+
+  LISTBASE_FOREACH (wmKeyMapDiffItem *, kmid, &keymap->diff_items) {
+    wmKeyMapItem *kmi = kmid->add_item;
+    if (!kmi) {
+      continue;
+    }
+
+    std::optional<std::string> asset_id = {};
+    if (STREQ(kmi->idname, "WM_OT_tool_set_by_id")) {
+      IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "name");
+      if (idprop && (idprop->type == IDP_STRING)) {
+        const char *prop_val = IDP_String(idprop);
+        printf("FOUND: %s\n", prop_val);
+        if (tool_name_lookup.contains(prop_val)) {
+          asset_id = tool_name_lookup.lookup(prop_val);
+        }
+      }
+    }
+    else if (STREQ(kmi->idname, "PAINT_OT_brush_select")) {
+      IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "sculpt_tool");
+      if (idprop && (idprop->type == IDP_INT)) {
+        const int prop_val = IDP_Int(idprop);
+        printf("FOUND: %d\n", prop_val);
+        if (id_lookup.contains(prop_val)) {
+          asset_id = id_lookup.lookup(prop_val);
+        }
+      }
+    }
+
+    if (asset_id) {
+      const std::string full_path = fmt::format("{}{}", asset_prefix, *asset_id);
+      printf("WROTE: %s\n", full_path.c_str());
+
+      WM_keymap_item_properties_reset(kmi, nullptr);
+      STRNCPY(kmi->idname, new_op_name.c_str());
+      IDP_AddToGroup(
+          kmi->properties,
+          blender::bke::idprop::create("asset_library_type", ASSET_LIBRARY_ESSENTIALS).release());
+      IDP_AddToGroup(
+          kmi->properties,
+          blender::bke::idprop::create("relative_asset_identifier", full_path).release());
+    }
+    else {
+      /* Handle deletion? */
+    }
+  }
 }
 
 void blo_do_versions_userdef(UserDef *userdef)
@@ -1066,24 +1196,11 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   if (!USER_VERSION_ATLEAST(403, 33)) {
+
     LISTBASE_FOREACH (wmKeyMap *, keymap, &userdef->user_keymaps) {
       printf("Keymap: %s\n", keymap->idname);
-
-      LISTBASE_FOREACH (wmKeyMapDiffItem *, kmid, &keymap->diff_items) {
-        wmKeyMapItem *kmi = kmid->add_item;
-        printf("\tAdd Item: Operator: %s\t=>", kmid->add_item->idname);
-        if (kmi) {
-          IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "name");
-          printf("\tName: \"");
-          if (idprop && (idprop->type == IDP_STRING)){
-            char *prop_val = static_cast<char *>(idprop->data.pointer);
-            while (*prop_val != '\0') {
-              printf("%c", *prop_val);
-              prop_val++;
-            }
-            printf("\"\n");
-          }
-        }
+      if (STREQ("Sculpt", keymap->idname)) {
+        keymap_update_mesh_sculpt_brushes(keymap);
       }
     }
   }
