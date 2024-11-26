@@ -156,7 +156,17 @@ struct FileData {
 
 /***/
 
+/**
+ * Create a separate #Main for the data-blocks of each library. Every linked data-block is moved to
+ * its corresponding #Main. Unlinked data-blocks are left in the original `bmain`.
+ *
+ * The `Main.curlib` pointer is set in each new `Main`.
+ */
 blender::Vector<Main *> split_library_mains(Main &bmain);
+
+/**
+ * Joins all the data-blocks from the given `library_bmains` into the `bmain`.
+ */
 void join_library_mains(Main &bmain, blender::Span<Main *> library_bmains);
 
 void blo_join_main(ListBase *mainlist);
