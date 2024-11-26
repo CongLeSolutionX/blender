@@ -521,9 +521,9 @@ void ED_view3d_win_to_3d(const View3D *v3d,
       dx += (rv3d->camdx + shiftx) * zoomfac;
       dy += (rv3d->camdy + shifty) * zoomfac;
     }
-    ray_origin[0] = (rv3d->persinv[0][0] * dx) + (rv3d->persinv[1][0] * dy) + rv3d->viewinv[3][0];
-    ray_origin[1] = (rv3d->persinv[0][1] * dx) + (rv3d->persinv[1][1] * dy) + rv3d->viewinv[3][1];
-    ray_origin[2] = (rv3d->persinv[0][2] * dx) + (rv3d->persinv[1][2] * dy) + rv3d->viewinv[3][2];
+    ray_origin[0] = (rv3d->persinv[0][0] * dx) + (rv3d->persinv[1][0] * dy) + rv3d->persinv[3][0];
+    ray_origin[1] = (rv3d->persinv[0][1] * dx) + (rv3d->persinv[1][1] * dy) + rv3d->persinv[3][1];
+    ray_origin[2] = (rv3d->persinv[0][2] * dx) + (rv3d->persinv[1][2] * dy) + rv3d->persinv[3][2];
 
     copy_v3_v3(ray_direction, rv3d->viewinv[2]);
     lambda = ray_point_factor_v3(depth_pt, ray_origin, ray_direction);
