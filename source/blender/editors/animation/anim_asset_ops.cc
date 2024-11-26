@@ -6,6 +6,7 @@
 #include "BKE_asset.hh"
 #include "BKE_asset_edit.hh"
 #include "BKE_context.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_preferences.h"
 #include "BKE_report.hh"
 
@@ -219,6 +220,7 @@ static int pose_asset_create_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  /* Temporary action in current main that will be exported and later deleted. */
   blender::animrig::Action &pose_action = extract_pose(*bmain, *pose_object);
   asset::mark_id(&pose_action.id);
   asset::generate_preview(C, &pose_action.id);
@@ -241,7 +243,9 @@ static int pose_asset_create_exec(bContext *C, wmOperator *op)
   library->catalog_service().write_to_disk(*final_full_asset_filepath);
   show_catalog_in_asset_shelf(*C, catalog_path);
 
-  refresh_asset_library(C, user_library_to_library_ref(*user_library));
+  BKE_id_free(bmain, &pose_action.id);
+
+  // refresh_asset_library(C, user_library_to_library_ref(*user_library));
 
   WM_main_add_notifier(NC_ASSET | ND_ASSET_LIST | NA_ADDED, nullptr);
 
