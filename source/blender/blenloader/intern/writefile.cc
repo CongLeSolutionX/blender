@@ -1424,7 +1424,9 @@ static bool write_file_handle(Main *mainvar,
                                       IDWALK_READONLY | IDWALK_INCLUDE_UI);
         }
 
-        if (ID_IS_OVERRIDE_LIBRARY_REAL(id) && !ID_IS_OVERRIDE_LIBRARY_VIRTUAL(id)) {
+        if (!wd->use_memfile && ID_IS_OVERRIDE_LIBRARY_REAL(id) &&
+            !ID_IS_OVERRIDE_LIBRARY_VIRTUAL(id))
+        {
           /* Forcefully ensure we know about all needed override operations. */
           BKE_lib_override_library_operations_create(mainvar, id, nullptr);
         }
