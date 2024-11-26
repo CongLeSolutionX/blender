@@ -145,7 +145,7 @@ bool foreach_action_slot_use_with_references(ID &animated_id,
     return callback(animated_id,
                     constraint_data->act,
                     constraint_data->action_slot_handle,
-                    constraint_data->action_slot_name);
+                    constraint_data->last_slot_identifier);
   };
 
   /* Visit Object constraints. */
