@@ -1,1 +1,2 @@
 Referenced by issue #120590, FBX and USD import is broken - blender does not detect custom normals, puts hard edges where they are not.
+Referenced by issue #130969, Wavefront OBJ import causes corruption depending on the position of the exported object
