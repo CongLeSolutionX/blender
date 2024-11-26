@@ -170,9 +170,9 @@ struct MeshRuntime {
   SharedCache<BVHCacheItem> bvh_cache_corner_tris;
   SharedCache<BVHCacheItem> bvh_cache_corner_tris_no_hidden;
   SharedCache<BVHCacheItem> bvh_cache_loose_verts;
+  SharedCache<BVHCacheItem> bvh_cache_loose_verts_no_hidden;
   SharedCache<BVHCacheItem> bvh_cache_loose_edges;
-  SharedCache<BVHCacheItem> bvh_cache_loose_no_hidden_verts;
-  SharedCache<BVHCacheItem> bvh_cache_loose_no_hidden_edges;
+  SharedCache<BVHCacheItem> bvh_cache_loose_edges_no_hidden;
 
   /** Needed in case we need to lazily initialize the mesh. */
   CustomData_MeshMasks cd_mask_extra = {};

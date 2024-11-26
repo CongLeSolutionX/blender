@@ -57,9 +57,9 @@ static void free_bvh_caches(MeshRuntime &mesh_runtime)
   mesh_runtime.bvh_cache_corner_tris.tag_dirty();
   mesh_runtime.bvh_cache_corner_tris_no_hidden.tag_dirty();
   mesh_runtime.bvh_cache_loose_verts.tag_dirty();
+  mesh_runtime.bvh_cache_loose_verts_no_hidden.tag_dirty();
   mesh_runtime.bvh_cache_loose_edges.tag_dirty();
-  mesh_runtime.bvh_cache_loose_no_hidden_verts.tag_dirty();
-  mesh_runtime.bvh_cache_loose_no_hidden_edges.tag_dirty();
+  mesh_runtime.bvh_cache_loose_edges_no_hidden.tag_dirty();
 }
 
 MeshRuntime::MeshRuntime() = default;
@@ -417,8 +417,8 @@ void Mesh::tag_topology_changed()
 void Mesh::tag_visibility_changed()
 {
   this->runtime->bvh_cache_corner_tris_no_hidden.tag_dirty();
-  this->runtime->bvh_cache_loose_no_hidden_verts.tag_dirty();
-  this->runtime->bvh_cache_loose_no_hidden_edges.tag_dirty();
+  this->runtime->bvh_cache_loose_verts_no_hidden.tag_dirty();
+  this->runtime->bvh_cache_loose_edges_no_hidden.tag_dirty();
 }
 
 /** \} */
