@@ -1,3 +1,4 @@
 Referenced by issue #128053, Gpencil: GPv3 crash on using CTRL key to switch to eraser
 Referenced by commit ebc4759df5868f648515618fc418d39680176fc3, Fix #128053: Crash when using Ctrl for eraser in grease pencil draw mode
 Referenced by issue #128349, Right clicking a sculpt brush in tool settings crashes Blender
+Referenced by pull request #130946, Fix #130783: Image editor tools do not set active brush
