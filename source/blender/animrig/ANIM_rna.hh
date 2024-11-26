@@ -11,7 +11,10 @@
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 #include "DNA_action_types.h"
-#include "RNA_types.hh"
+#include "RNA_path.hh"
+
+struct PointerRNA;
+struct PropertyRNA;
 
 namespace blender::animrig {
 
@@ -20,5 +23,8 @@ Vector<float> get_rna_values(PointerRNA *ptr, PropertyRNA *prop);
 
 /** Get the rna path for the given rotation mode. */
 StringRef get_rotation_mode_path(eRotationModes rotation_mode);
+
+/** For the given RNA pointer, construct a vector of valid RNA paths for keyframing. */
+Vector<RNAPath> construct_rna_paths(PointerRNA *ptr);
 
 }  // namespace blender::animrig

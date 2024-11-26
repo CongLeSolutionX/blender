@@ -229,119 +229,6 @@ static int insert_key_with_keyingset(bContext *C, wmOperator *op, KeyingSet *ks)
   return OPERATOR_FINISHED;
 }
 
-static bool is_idproperty_keyable(IDProperty *id_prop, PointerRNA *ptr, PropertyRNA *prop)
-{
-  /* While you can cast the IDProperty* to a PropertyRNA* and pass it to the functions, this
-   * does not work because it will not have the right flags set. Instead the resolved
-   * PointerRNA and PropertyRNA need to be passed. */
-  if (!RNA_property_anim_editable(ptr, prop)) {
-    return false;
-  }
-
-  if (ELEM(id_prop->type,
-           eIDPropertyType::IDP_BOOLEAN,
-           eIDPropertyType::IDP_INT,
-           eIDPropertyType::IDP_FLOAT,
-           eIDPropertyType::IDP_DOUBLE))
-  {
-    return true;
-  }
-
-  if (id_prop->type == eIDPropertyType::IDP_ARRAY) {
-    if (ELEM(id_prop->subtype,
-             eIDPropertyType::IDP_BOOLEAN,
-             eIDPropertyType::IDP_INT,
-             eIDPropertyType::IDP_FLOAT,
-             eIDPropertyType::IDP_DOUBLE))
-    {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-static blender::Vector<RNAPath> construct_rna_paths(PointerRNA *ptr)
-{
-  eRotationModes rotation_mode;
-  IDProperty *properties;
-  blender::Vector<RNAPath> paths;
-
-  if (ptr->type == &RNA_PoseBone) {
-    bPoseChannel *pchan = static_cast<bPoseChannel *>(ptr->data);
-    rotation_mode = eRotationModes(pchan->rotmode);
-    properties = pchan->prop;
-  }
-  else if (ptr->type == &RNA_Object) {
-    Object *ob = static_cast<Object *>(ptr->data);
-    rotation_mode = eRotationModes(ob->rotmode);
-    properties = ob->id.properties;
-  }
-  else {
-    /* Pointer type not supported. */
-    return paths;
-  }
-
-  eKeyInsertChannels insert_channel_flags = eKeyInsertChannels(U.key_insert_channels);
-  if (insert_channel_flags & USER_ANIM_KEY_CHANNEL_LOCATION) {
-    paths.append({"location"});
-  }
-  if (insert_channel_flags & USER_ANIM_KEY_CHANNEL_ROTATION) {
-    switch (rotation_mode) {
-      case ROT_MODE_QUAT:
-        paths.append({"rotation_quaternion"});
-        break;
-      case ROT_MODE_AXISANGLE:
-        paths.append({"rotation_axis_angle"});
-        break;
-      case ROT_MODE_XYZ:
-      case ROT_MODE_XZY:
-      case ROT_MODE_YXZ:
-      case ROT_MODE_YZX:
-      case ROT_MODE_ZXY:
-      case ROT_MODE_ZYX:
-        paths.append({"rotation_euler"});
-      default:
-        break;
-    }
-  }
-  if (insert_channel_flags & USER_ANIM_KEY_CHANNEL_SCALE) {
-    paths.append({"scale"});
-  }
-  if (insert_channel_flags & USER_ANIM_KEY_CHANNEL_ROTATION_MODE) {
-    paths.append({"rotation_mode"});
-  }
-  if (insert_channel_flags & USER_ANIM_KEY_CHANNEL_CUSTOM_PROPERTIES) {
-    if (properties) {
-      LISTBASE_FOREACH (IDProperty *, id_prop, &properties->data.group) {
-        PointerRNA resolved_ptr;
-        PropertyRNA *resolved_prop;
-        std::string path = id_prop->name;
-        /* Resolving the path twice, once as RNA property (without brackets, `"propname"`),
-         * and once as ID property (with brackets, `["propname"]`).
-         * This is required to support IDProperties that have been defined as part of an add-on.
-         * Those need to be animated through an RNA path without the brackets. */
-        bool is_resolved = RNA_path_resolve_property(
-            ptr, path.c_str(), &resolved_ptr, &resolved_prop);
-        if (!is_resolved) {
-          char name_escaped[MAX_IDPROP_NAME * 2];
-          BLI_str_escape(name_escaped, id_prop->name, sizeof(name_escaped));
-          path = fmt::format("[\"{}\"]", name_escaped);
-          is_resolved = RNA_path_resolve_property(
-              ptr, path.c_str(), &resolved_ptr, &resolved_prop);
-        }
-        if (!is_resolved) {
-          continue;
-        }
-        if (is_idproperty_keyable(id_prop, &resolved_ptr, resolved_prop)) {
-          paths.append({path});
-        }
-      }
-    }
-  }
-  return paths;
-}
-
 /* Fill the list with items depending on the mode of the context. */
 static bool get_selection(bContext *C, blender::Vector<PointerRNA> *r_selection)
 {
@@ -407,7 +294,7 @@ static int insert_key(bContext *C, wmOperator *op)
       BKE_reportf(op->reports, RPT_ERROR, "'%s' is not editable", selected_id->name + 2);
       continue;
     }
-    Vector<RNAPath> rna_paths = construct_rna_paths(&id_ptr);
+    Vector<RNAPath> rna_paths = animrig::construct_rna_paths(&id_ptr);
 
     combined_result.merge(animrig::insert_keyframes(bmain,
                                                     &id_ptr,
