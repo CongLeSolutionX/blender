@@ -1286,7 +1286,6 @@ static bool write_file_handle(Main *mainvar,
                               const bool use_userdef,
                               const BlendThumbnail *thumb)
 {
-  ListBase mainlist;
   char buf[16];
   WriteData *wd;
 
