@@ -3686,13 +3686,6 @@ static bool strip_intersects_range(const Scene *scene, Sequence *seq, blender::i
          SEQ_time_strip_intersects_frame(scene, seq, range.y - 1);
 }
 
-/* So the new idea is: have a set of silent ranges, go over all strips and make a cut.
- * - Each strip ater silent range will accumulate offset
- * - When strip is split, copy offset to new strip
- * This approach is bit more easier to implement, but god knows what happens if sounds strips would
- * overlap in time
- */
-
 static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
@@ -3713,6 +3706,13 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
   blender::Map<Sequence *, int> strip_to_offset;
   blender::Vector<blender::int2> silent_ranges = silent_ranges_get_ordered(
       scene, sound_strips, op);
+
+  for (Sequence *seq : sound_strips) {
+    if (seq->sound == nullptr || seq->sound->waveform == nullptr) {
+      BKE_report(op->reports, RPT_ERROR, "Waveforms must be enabled and loaded");
+      return OPERATOR_CANCELLED;
+    }
+  }
 
   /* Split strips, flag for removal and copy pending offset from original to right side strip. */
   for (blender::int2 range : silent_ranges) {
@@ -3767,6 +3767,11 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
   /* Offset strips. */
   for (auto item : strip_to_offset.items()) {
     SEQ_transform_translate_sequence(scene, item.key, item.value);
+  }
+  for (auto item : strip_to_offset.items()) {
+    if (SEQ_transform_test_overlap(scene, ed->seqbasep, item.key)) {
+      SEQ_transform_seqbase_shuffle(ed->seqbasep, item.key, scene);
+    }
   }
 
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
