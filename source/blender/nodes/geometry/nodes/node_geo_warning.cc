@@ -89,6 +89,7 @@ static void node_register()
 
   geo_node_type_base(&ntype, GEO_NODE_WARNING, "Warning", NODE_CLASS_INTERFACE);
   ntype.declare = node_declare;
+  ntype.labelfunc = node_warning_label;
   ntype.draw_buttons = node_layout;
   blender::bke::node_register_type(&ntype);
 
