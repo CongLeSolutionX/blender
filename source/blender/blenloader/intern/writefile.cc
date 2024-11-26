@@ -1272,8 +1272,9 @@ static int write_id_direct_linked_data_process_cb(LibraryIDLinkCallbackData *cb_
   return IDWALK_RET_NOP;
 }
 
-static void write_id(WriteData *wd, ID *id, const IDTypeInfo *id_type)
+static void write_id(WriteData *wd, ID *id)
 {
+  const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
   mywrite_id_begin(wd, id);
   if (id_type->blend_write != nullptr) {
     BlendWriter writer = {wd};
@@ -1431,8 +1432,8 @@ static bool write_file_handle(Main *mainvar,
   const bool is_undo = wd->use_memfile;
   blender::Vector<ID *> local_ids_to_write = gather_local_ids_to_write(mainvar, is_undo);
 
-  /* If not writing undo data, properly set directly linked IDs as `ID_TAG_EXTERN`. */
   if (!is_undo) {
+    /* If not writing undo data, properly set directly linked IDs as `ID_TAG_EXTERN`. */
     for (ID *id : local_ids_to_write) {
       BKE_library_foreach_ID_link(mainvar,
                                   id,
@@ -1440,42 +1441,17 @@ static bool write_file_handle(Main *mainvar,
                                   nullptr,
                                   IDWALK_READONLY | IDWALK_INCLUDE_UI);
     }
-  }
 
-  OverrideLibraryStorage *override_storage = is_undo ?
-                                                 nullptr :
-                                                 BKE_lib_override_library_operations_store_init();
+    /* Forcefully ensure we know about all needed override operations. */
+    for (ID *id : local_ids_to_write) {
+      if (ID_IS_OVERRIDE_LIBRARY_REAL(id) && !ID_IS_OVERRIDE_LIBRARY_VIRTUAL(id)) {
+        BKE_lib_override_library_operations_create(mainvar, id, nullptr);
+      }
+    }
+  }
 
   for (ID *id : local_ids_to_write) {
-    const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
-
-    const bool do_override = ID_IS_OVERRIDE_LIBRARY_REAL(id) && override_storage;
-    if (do_override) {
-      BKE_lib_override_library_operations_store_start(mainvar, override_storage, id);
-    }
-    write_id(wd, id, id_type);
-    if (do_override) {
-      BKE_lib_override_library_operations_store_end(override_storage, id);
-    }
-  }
-
-  if (override_storage) {
-    blender::Vector<ID *> override_ids_to_write;
-    ID *id;
-    FOREACH_MAIN_ID_BEGIN (override_storage, id) {
-      override_ids_to_write.append(id);
-    }
-    FOREACH_MAIN_ID_END;
-
-    for (ID *id : override_ids_to_write) {
-      const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
-      write_id(wd, id, id_type);
-    }
-  }
-
-  if (override_storage) {
-    BKE_lib_override_library_operations_store_finalize(override_storage);
-    override_storage = nullptr;
+    write_id(wd, id);
   }
 
   /* Special handling, operating over split Mains... */
