@@ -81,6 +81,7 @@
 #include "DEG_depsgraph_build.hh"
 
 /* Own include. */
+#include "intern/RNA_blender.hh"
 #include "sequencer_intern.hh"
 #include <algorithm>
 #include <cstddef>
@@ -3664,9 +3665,8 @@ static RemoveSilenceResult remove_silence_do_split(bContext *C, Sequence *seq, b
     result.silent = seq;
   }
 
-  // Should not happen!!!
   if (result.silent == nullptr) {
-    // BLI_assert_unreachable();
+    BLI_assert_unreachable();
     return result;
   }
 
@@ -3682,8 +3682,9 @@ static RemoveSilenceResult remove_silence_do_split(bContext *C, Sequence *seq, b
 
 static bool strip_intersects_range(const Scene *scene, Sequence *seq, blender::int2 range)
 {
-  return SEQ_time_strip_intersects_frame(scene, seq, range.x) ||
-         SEQ_time_strip_intersects_frame(scene, seq, range.y);
+  /* Padding of 1 is needed to avoid attempt of splitting strip right next to the range. */
+  return SEQ_time_strip_intersects_frame(scene, seq, range.x + 1) ||
+         SEQ_time_strip_intersects_frame(scene, seq, range.y - 1);
 }
 
 /* So the new idea is: have a set of silent ranges, go over all strips and make a cut.
@@ -3701,9 +3702,11 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
 
   blender::Vector strips = ED_sequencer_selected_strips_from_context(C).extract_vector();
 
-  /* It's easier to invalidate cache on original strips. */
   for (Sequence *seq : strips) {
+    /* It's easier to invalidate cache on original strips. */
     SEQ_relations_invalidate_cache_raw(scene, seq);
+    /* Connected strips are somehow interfering with the process. */  // check
+    SEQ_disconnect(seq);
   }
 
   blender::Vector<Sequence *> sound_strips = strips;
@@ -3713,57 +3716,42 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
   blender::Vector<blender::int2> silent_ranges = silent_ranges_get_ordered(
       scene, sound_strips, op);
 
-  blender::Vector<Sequence *> unprocessed_strips = strips;
-
   /* Split strips, flag for removal and copy pending offset from original to right side strip. */
   for (blender::int2 range : silent_ranges) {
-    int silent_len = 0;
-    /* Iterate over copy of `strips`, since it will be modified. */
+    blender::Vector<Sequence *> unprocessed_strips;
+
     for (Sequence *seq : strips) {
+      /* Add strips that are to be split to `unprocessed_strips`. */
+      if (SEQ_time_right_handle_frame_get(scene, seq) > range.y) {
+        unprocessed_strips.append(seq);
+      }
+
       if (!strip_intersects_range(scene, seq, range)) {
         continue;
       }
 
-      const int offset = strip_to_offset.lookup_default(seq, 0);
       RemoveSilenceResult result = remove_silence_do_split(C, seq, range);
-
-      if (result.silent == nullptr) {
-        continue;
-      }
-
-      if (seq->type == SEQ_TYPE_SOUND_RAM) {
-        silent_len = SEQ_time_left_handle_frame_get(scene, result.silent) -
-                     SEQ_time_right_handle_frame_get(scene, result.silent);
-      }
-
-      strips_to_remove.append(
-          result.silent); /* Since strip has been split, add new one to vector. */
+      strips_to_remove.append(result.silent);
 
       if (result.right != nullptr) {
-        strip_to_offset.add_overwrite(result.right, offset);  // only add!
-        /* Since strip has been split, add new one to vector. */
-        strips.append(result.right);
+        const int offset = strip_to_offset.lookup_default(result.left, 0);
+        strip_to_offset.add(result.right, offset);
+        /* Strip may be split again, so add it to `unprocessed_strips`. */
+        unprocessed_strips.append(result.right);
       }
     }
 
-    unprocessed_strips = {};
-
     /* Process offset for strips to the right of silent range. */
-    for (Sequence *seq : strips) {
+    for (Sequence *seq : unprocessed_strips) {
       if (SEQ_time_right_handle_frame_get(scene, seq) < range.y) {
         continue;
       }
+      int silent_len = range.x - range.y;
 
-      unprocessed_strips.append(seq);
-
-      if (!strip_to_offset.contains(seq)) {
-        strip_to_offset.add(seq, silent_len);
-        continue;
-      }
-
-      const int new_offset = strip_to_offset.lookup(seq) + silent_len;
-      strip_to_offset.remove(seq);  // XXX
-      strip_to_offset.add(seq, new_offset);
+      strip_to_offset.add_or_modify(
+          seq,
+          [&](int *offset) { *offset = silent_len; },
+          [&](int *offset) { *offset += silent_len; });
     }
 
     /* Overwrite strips, so strips with no silence are not iterated over anymore. */
@@ -3775,7 +3763,6 @@ static int sequencer_remove_silence_exec(bContext *C, wmOperator *op)
     /* To effectively prevent use after free, filter out removed strips from `strip_to_offset`. */
     strip_to_offset.remove(seq);
     SEQ_edit_flag_for_removal(scene, seqbase, seq);
-    // seq->color_tag = SEQUENCE_COLOR_01;
   }
   SEQ_edit_remove_flagged_sequences(scene, seqbase);
 
