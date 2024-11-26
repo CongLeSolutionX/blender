@@ -458,7 +458,7 @@ blender::Vector<Main *> split_library_mains(Main &bmain)
   ListBase main_list{};
   blo_split_main(&main_list, &bmain);
   blender::Vector<Main *> library_bmains;
-  LISTBASE_FOREACH (Main *, main, &main_list) {
+  LISTBASE_FOREACH_MUTABLE (Main *, main, &main_list) {
     main->prev = main->next = nullptr;
     if (main == &bmain) {
       continue;
