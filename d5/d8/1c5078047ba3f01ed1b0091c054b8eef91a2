@@ -1,2 +1,3 @@
 Referenced by issue #129892, VSE retiming selection is broken (onlywith Left Mouse select user Preference?)
 Referenced by pull request #129893, Fix #129892: Retiming selection is broken
+Referenced by issue #130944, Regression: IC keymap: Click drag not invoking sequencer select box tool
