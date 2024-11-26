@@ -453,6 +453,28 @@ void blo_split_main(ListBase *mainlist, Main *main)
   MEM_freeN(lib_main_array);
 }
 
+blender::Vector<Main *> split_library_mains(Main &bmain)
+{
+  ListBase main_list;
+  blo_split_main(&main_list, &bmain);
+  blender::Vector<Main *> library_bmains;
+  LISTBASE_FOREACH (Main *, main, &main_list) {
+    library_bmains.append(main);
+    main->prev = main->next = nullptr;
+  }
+  return library_bmains;
+}
+
+void join_library_mains(Main &bmain, blender::Span<Main *> library_bmains)
+{
+  ListBase main_list;
+  BLI_addtail(&main_list, &bmain);
+  for (Main *library_bmain : library_bmains) {
+    BLI_addtail(&main_list, library_bmain);
+  }
+  blo_join_main(&main_list);
+}
+
 static void read_file_version(FileData *fd, Main *main)
 {
   BHead *bhead;

@@ -155,6 +155,10 @@ struct FileData {
 #define SIZEOFBLENDERHEADER 12
 
 /***/
+
+blender::Vector<Main *> split_library_mains(Main &bmain);
+void join_library_mains(Main &bmain, blender::Span<Main *> library_bmains);
+
 void blo_join_main(ListBase *mainlist);
 void blo_split_main(ListBase *mainlist, Main *main);
 

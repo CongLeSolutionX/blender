@@ -44,12 +44,11 @@ static CLG_LogRef LOG = {"blo.blend_validate"};
 
 bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
 {
-  ListBase mainlist;
   bool is_valid = true;
 
   BKE_main_lock(bmain);
 
-  blo_split_main(&mainlist, bmain);
+  blender::Vector<Main *> library_bmains = split_library_mains(*bmain);
 
   ListBase *lbarray[INDEX_ID_MAX];
   int i = set_listbasepointers(bmain, lbarray);
@@ -68,7 +67,7 @@ bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
     }
   }
 
-  for (Main *curmain = bmain->next; curmain != nullptr; curmain = curmain->next) {
+  for (Main *curmain : library_bmains) {
     Library *curlib = curmain->curlib;
     if (curlib == nullptr) {
       BKE_report(reports, RPT_ERROR, "Library database with null library data-block pointer!");
@@ -149,10 +148,7 @@ bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
     BLO_blendhandle_close(bh);
   }
 
-  blo_join_main(&mainlist);
-
-  BLI_assert(BLI_listbase_is_single(&mainlist));
-  BLI_assert(mainlist.first == (void *)bmain);
+  join_library_mains(*bmain, library_bmains);
 
   BKE_main_unlock(bmain);
 

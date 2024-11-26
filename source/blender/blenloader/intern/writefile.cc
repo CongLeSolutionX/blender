@@ -1026,14 +1026,14 @@ static void write_userdef(BlendWriter *writer, const UserDef *userdef)
 }
 
 /** Keep it last of `write_*_data` functions. */
-static void write_libraries(WriteData *wd, Main *main)
+static void write_libraries(WriteData *wd, blender::Span<Main *> library_bmains)
 {
   ListBase *lbarray[INDEX_ID_MAX];
   ID *id;
   int a, tot;
   bool found_one;
 
-  for (; main; main = main->next) {
+  for (Main *main : library_bmains) {
     a = tot = set_listbasepointers(main, lbarray);
 
     /* Test: is lib being used. */
@@ -1338,7 +1338,7 @@ static bool write_file_handle(Main *mainvar,
     }
   }
 
-  blo_split_main(&mainlist, mainvar);
+  blender::Vector<Main *> library_bmains = split_library_mains(*mainvar);
 
   SNPRINTF(buf,
            "BLENDER%c%c%.3d",
@@ -1463,7 +1463,7 @@ static bool write_file_handle(Main *mainvar,
   }
 
   /* Special handling, operating over split Mains... */
-  write_libraries(wd, mainvar->next);
+  write_libraries(wd, library_bmains);
 
   /* So changes above don't cause a 'DNA1' to be detected as changed on undo. */
   mywrite_flush(wd);
@@ -1483,7 +1483,7 @@ static bool write_file_handle(Main *mainvar,
   bhead.code = BLO_CODE_ENDB;
   write_bhead(wd, bhead);
 
-  blo_join_main(&mainlist);
+  join_library_mains(*mainvar, library_bmains);
 
   return mywrite_end(wd);
 }
