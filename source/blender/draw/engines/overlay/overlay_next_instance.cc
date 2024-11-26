@@ -32,8 +32,7 @@ void Instance::init()
   state.v3d = ctx->v3d;
   state.region = ctx->region;
   state.rv3d = ctx->rv3d;
-  state.active_base = BKE_view_layer_active_base_get(ctx->view_layer);
-  state.object_active = ctx->obact;
+  state.object_active = BKE_view_layer_active_object_get(ctx->view_layer);
   state.object_mode = ctx->object_mode;
   state.cfra = DEG_get_ctime(state.depsgraph);
   state.is_viewport_image_render = DRW_state_is_viewport_image_render();
@@ -256,10 +255,10 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
   if (!state.hide_overlays) {
     switch (ob_ref.object->type) {
       case OB_EMPTY:
-        layer.empties.object_sync_ex(ob_ref, shapes, manager, resources, state);
+        layer.empties.object_sync(manager, ob_ref, resources, state);
         break;
       case OB_CAMERA:
-        layer.cameras.object_sync_ex(ob_ref, shapes, manager, resources, state);
+        layer.cameras.object_sync(manager, ob_ref, resources, state);
         break;
       case OB_ARMATURE:
         if (!in_edit_mode) {
@@ -312,24 +311,24 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
 
 void Instance::end_sync()
 {
-  origins.end_sync(resources, shapes, state);
+  origins.end_sync(resources, state);
   resources.end_sync();
 
   auto end_sync_layer = [&](OverlayLayer &layer) {
-    layer.armatures.end_sync(resources, shapes, state);
-    layer.axes.end_sync(resources, shapes, state);
-    layer.bounds.end_sync(resources, shapes, state);
-    layer.cameras.end_sync(resources, shapes, state);
-    layer.edit_text.end_sync(resources, shapes, state);
-    layer.empties.end_sync(resources, shapes, state);
-    layer.force_fields.end_sync(resources, shapes, state);
-    layer.lights.end_sync(resources, shapes, state);
-    layer.light_probes.end_sync(resources, shapes, state);
-    layer.mesh_uvs.end_sync(resources, shapes, state);
-    layer.metaballs.end_sync(resources, shapes, state);
-    layer.relations.end_sync(resources, shapes, state);
-    layer.fluids.end_sync(resources, shapes, state);
-    layer.speakers.end_sync(resources, shapes, state);
+    layer.armatures.end_sync(resources, state);
+    layer.axes.end_sync(resources, state);
+    layer.bounds.end_sync(resources, state);
+    layer.cameras.end_sync(resources, state);
+    layer.edit_text.end_sync(resources, state);
+    layer.empties.end_sync(resources, state);
+    layer.force_fields.end_sync(resources, state);
+    layer.lights.end_sync(resources, state);
+    layer.light_probes.end_sync(resources, state);
+    layer.mesh_uvs.end_sync(resources, state);
+    layer.metaballs.end_sync(resources, state);
+    layer.relations.end_sync(resources, state);
+    layer.fluids.end_sync(resources, state);
+    layer.speakers.end_sync(resources, state);
   };
   end_sync_layer(regular);
   end_sync_layer(infront);
@@ -649,14 +648,13 @@ bool Instance::object_is_paint_mode(const Object *object)
   if (object->type == OB_GREASE_PENCIL && (state.object_mode & OB_MODE_ALL_PAINT_GPENCIL)) {
     return true;
   }
-  return state.active_base && (object == state.active_base->object) &&
-         (state.object_mode & OB_MODE_ALL_PAINT);
+  return (object == state.object_active) && (state.object_mode & OB_MODE_ALL_PAINT);
 }
 
 bool Instance::object_is_sculpt_mode(const ObjectRef &ob_ref)
 {
   if (state.object_mode == OB_MODE_SCULPT_CURVES) {
-    const Object *active_object = state.active_base->object;
+    const Object *active_object = state.object_active;
     const bool is_active_object = ob_ref.object == active_object;
 
     bool is_geonode_preview = ob_ref.dupli_object && ob_ref.dupli_object->preview_base_geometry;
@@ -665,7 +663,7 @@ bool Instance::object_is_sculpt_mode(const ObjectRef &ob_ref)
   }
 
   if (state.object_mode == OB_MODE_SCULPT) {
-    const Object *active_object = state.active_base->object;
+    const Object *active_object = state.object_active;
     const bool is_active_object = ob_ref.object == active_object;
     return is_active_object;
   }
@@ -681,7 +679,7 @@ bool Instance::object_is_particle_edit_mode(const ObjectRef &ob_ref)
 bool Instance::object_is_sculpt_mode(const Object *object)
 {
   if (object->sculpt && (object->sculpt->mode_type == OB_MODE_SCULPT)) {
-    return object == state.active_base->object;
+    return object == state.object_active;
   }
   return false;
 }
