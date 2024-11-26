@@ -43,7 +43,7 @@ class UniformBuf {
   UniformBuf(size_t size, const char *name);
   virtual ~UniformBuf();
 
-  virtual void update(const void * /*data*/) = 0;
+  virtual void update(const void *data) = 0;
 
   virtual void clear_to_zero() = 0;
 
