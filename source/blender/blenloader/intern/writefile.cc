@@ -1456,6 +1456,7 @@ static bool write_file_handle(Main *mainvar,
     }
   }
 
+  /* Actually write local data-blocks to the file. */
   for (ID *id : local_ids_to_write) {
     write_id(wd, id);
   }
