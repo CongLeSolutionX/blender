@@ -1,2 +1,3 @@
 Referenced by pull request #130872, Cycles: Disable -fassociative-math on Linux to avoid GGX issues
 Referenced by issue #130389, Cycles: CPU / GPU difference
+Referenced by issue #130221, 4.3: Candidates for corrective releases
