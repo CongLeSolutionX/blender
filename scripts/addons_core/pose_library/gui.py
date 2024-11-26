@@ -77,6 +77,8 @@ def pose_library_asset_browser_context_menu(self: UIList, context: Context) -> N
     layout = self.layout
 
     layout.separator()
+    layout.operator("poselib.asset_overwrite")
+    layout.separator()
 
     layout.operator("poselib.apply_pose_asset", text="Apply Pose").flipped = False
     layout.operator("poselib.apply_pose_asset", text="Apply Pose Flipped").flipped = True

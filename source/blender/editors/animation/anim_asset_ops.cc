@@ -34,6 +34,7 @@
 #include "AS_asset_catalog.hh"
 #include "AS_asset_catalog_tree.hh"
 #include "AS_asset_library.hh"
+#include "AS_asset_representation.hh"
 
 #include "anim_intern.hh"
 
@@ -299,6 +300,55 @@ void POSELIB_OT_asset_create(wmOperatorType *ot)
       ot->srna, "catalog_path", nullptr, MAX_NAME, "Catalog", "Catalog to use for the new asset");
   RNA_def_property_string_search_func_runtime(
       prop, visit_library_prop_catalogs_catalog_for_search_fn, PROP_STRING_SEARCH_SUGGESTION);
+}
+
+static int pose_asset_overwrite_exec(bContext *C, wmOperator *op)
+{
+  return OPERATOR_FINISHED;
+}
+
+static bool pose_asset_overwrite_poll(bContext *C)
+{
+  const AssetRepresentationHandle *asset_handle = CTX_wm_asset(C);
+  if (!asset_handle) {
+    return false;
+  }
+
+  if (asset_handle->get_id_type() != ID_AC) {
+    return false;
+  }
+
+  AssetWeakReference asset_reference = asset_handle->make_weak_reference();
+  Main *bmain = CTX_data_main(C);
+  bAction *action = reinterpret_cast<bAction *>(
+      bke::asset_edit_id_from_weak_reference(*bmain, ID_AC, asset_reference));
+
+  if (!action) {
+    return false;
+  }
+
+  if (!bke::asset_edit_id_is_editable(action->id)) {
+    return false;
+  }
+
+  if (!bke::asset_edit_id_is_writable(action->id)) {
+    CTX_wm_operator_poll_msg_set(C, "Asset blend file is not editable");
+    return false;
+  }
+
+  return true;
+}
+
+/* Calling it overwrite instead of save because we aren't actually saving an opened asset. */
+void POSELIB_OT_asset_overwrite(wmOperatorType *ot)
+{
+  ot->name = "Overwrite Pose Asset";
+  ot->description =
+      "Update the selected pose asset in the asset library from the currently selected bones";
+  ot->idname = "POSELIB_OT_asset_overwrite";
+
+  ot->exec = pose_asset_overwrite_exec;
+  ot->poll = pose_asset_overwrite_poll;
 }
 
 }  // namespace blender::ed::animrig
