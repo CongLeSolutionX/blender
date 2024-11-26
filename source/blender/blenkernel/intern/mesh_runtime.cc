@@ -414,6 +414,13 @@ void Mesh::tag_topology_changed()
   BKE_mesh_runtime_clear_geometry(this);
 }
 
+void Mesh::tag_visibility_changed()
+{
+  this->runtime->bvh_cache_corner_tris_no_hidden.tag_dirty();
+  this->runtime->bvh_cache_loose_no_hidden_verts.tag_dirty();
+  this->runtime->bvh_cache_loose_no_hidden_edges.tag_dirty();
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

@@ -427,6 +427,8 @@ typedef struct Mesh {
   void tag_edges_split();
   /** Call for topology updates not described by other update tags. */
   void tag_topology_changed();
+  /** Call when changing the ".hide_vert", ".hide_edge", or ".hide_poly" attributes. */
+  void tag_visibility_changed();
 #endif
 } Mesh;
 
