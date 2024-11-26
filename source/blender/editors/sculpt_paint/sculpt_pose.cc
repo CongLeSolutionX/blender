@@ -339,11 +339,14 @@ BLI_NOINLINE static void add_fake_neighbors(const Span<int> fake_neighbors,
 {
   const OffsetIndices<int> offsets(neighbor_offsets);
   for (const int i : verts.index_range()) {
+    const Span<int> orig_neighbors = orig_neighbor_data.slice(offsets[i]);
+
+    /* Modify the offsets in-place after using them to slice the current neighbor data. */
+    neighbor_offsets[i] = neighbor_data_with_fake.size();
+    neighbor_data_with_fake.extend(orig_neighbors);
     const int neighbor = fake_neighbors[verts[i]];
-    neighbor_data_with_fake.extend(orig_neighbor_data.slice(offsets[i]));
     if (neighbor != FAKE_NEIGHBOR_NONE) {
       neighbor_data_with_fake.append(neighbor);
-      neighbor_offsets[i] = neighbor_data_with_fake.size();
     }
   }
   neighbor_offsets.last() = neighbor_data_with_fake.size();
@@ -366,14 +369,13 @@ static void grow_factors_mesh(const ePaintSymmetryFlags symm,
 {
   const Span<int> verts = hide::node_visible_verts(node, hide_vert, tls.vert_indices);
 
-  const GroupedSpan<int> neighbors = calc_vert_neighbors(faces,
-                                                         corner_verts,
-                                                         vert_to_face_map,
-                                                         hide_poly,
-                                                         verts,
-                                                         tls.neighbor_offsets,
-                                                         tls.neighbor_data);
-
+  calc_vert_neighbors(faces,
+                      corner_verts,
+                      vert_to_face_map,
+                      hide_poly,
+                      verts,
+                      tls.neighbor_offsets,
+                      tls.neighbor_data);
   if (!fake_neighbors.is_empty()) {
     add_fake_neighbors(fake_neighbors,
                        verts,
@@ -381,6 +383,10 @@ static void grow_factors_mesh(const ePaintSymmetryFlags symm,
                        tls.neighbor_offsets,
                        tls.neighbor_data_with_fake);
   }
+  const GroupedSpan<int> neighbors(tls.neighbor_offsets.as_span(),
+                                   fake_neighbors.is_empty() ?
+                                       tls.neighbor_data.as_span() :
+                                       tls.neighbor_data_with_fake.as_span());
 
   for (const int i : verts.index_range()) {
     const int vert = verts[i];
