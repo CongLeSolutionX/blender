@@ -137,7 +137,7 @@ void MTLStorageBuf::init()
 
 void MTLStorageBuf::update(const void *data)
 {
-  StorageBuf::update(data);
+  set_data_initialized();
 
   /* We only need to initialize the storage buffer for default buffer types. */
   if (storage_source_ != MTL_STORAGE_BUF_TYPE_DEFAULT) {
@@ -213,7 +213,7 @@ void MTLStorageBuf::update(const void *data)
 
 void MTLStorageBuf::bind(int slot)
 {
-  StorageBuf::bind(slot);
+  check_data_initialization_on_bind(slot);
 
   if (slot >= MTL_MAX_BUFFER_BINDINGS) {
     fprintf(
@@ -275,7 +275,7 @@ void MTLStorageBuf::unbind()
 
 void MTLStorageBuf::clear(uint32_t clear_value)
 {
-  StorageBuf::clear(clear_value);
+  set_data_initialized();
 
   /* Fetch active context. */
   MTLContext *ctx = MTLContext::get();
@@ -316,7 +316,7 @@ void MTLStorageBuf::clear(uint32_t clear_value)
 
 void MTLStorageBuf::copy_sub(VertBuf *src_, uint dst_offset, uint src_offset, uint copy_size)
 {
-  StorageBuf::copy_sub(src_, dst_offset, src_offset, copy_size);
+  set_data_initialized();
 
   MTLVertBuf *src = static_cast<MTLVertBuf *>(src_);
   MTLStorageBuf *dst = this;

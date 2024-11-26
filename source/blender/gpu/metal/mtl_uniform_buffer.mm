@@ -53,7 +53,7 @@ MTLUniformBuf::~MTLUniformBuf()
 
 void MTLUniformBuf::update(const void *data)
 {
-  UniformBuf::update(data);
+  set_data_initialized();
 
   BLI_assert(this);
   BLI_assert(size_in_bytes_ > 0);
@@ -93,7 +93,7 @@ void MTLUniformBuf::update(const void *data)
 
 void MTLUniformBuf::clear_to_zero()
 {
-  UniformBuf::clear_to_zero();
+  set_data_initialized();
 
   /* TODO(fclem): Avoid another allocation and just do the clear on the GPU if possible. */
   void *clear_data = calloc(1, size_in_bytes_);
@@ -103,7 +103,7 @@ void MTLUniformBuf::clear_to_zero()
 
 void MTLUniformBuf::bind(int slot)
 {
-  UniformBuf::bind(slot);
+  check_data_initialization_on_bind(slot, false);
 
   if (slot < 0) {
     MTL_LOG_WARNING("Failed to bind UBO %p. uniform location %d invalid.", this, slot);
@@ -137,7 +137,7 @@ void MTLUniformBuf::bind(int slot)
 
 void MTLUniformBuf::bind_as_ssbo(int slot)
 {
-  UniformBuf::bind_as_ssbo(slot);
+  check_data_initialization_on_bind(slot, true);
 
   if (slot < 0) {
     MTL_LOG_WARNING("Failed to bind UBO %p as SSBO. uniform location %d invalid.", this, slot);

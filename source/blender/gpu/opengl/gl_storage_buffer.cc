@@ -74,7 +74,7 @@ void GLStorageBuf::init()
 
 void GLStorageBuf::update(const void *data)
 {
-  StorageBuf::update(data);
+  set_data_initialized();
 
   if (ssbo_id_ == 0) {
     this->init();
@@ -93,7 +93,7 @@ void GLStorageBuf::update(const void *data)
 
 void GLStorageBuf::bind(int slot)
 {
-  StorageBuf::bind(slot);
+  check_data_initialization_on_bind(slot);
 
   if (slot >= GLContext::max_ssbo_binds) {
     fprintf(
@@ -143,7 +143,7 @@ void GLStorageBuf::unbind()
 
 void GLStorageBuf::clear(uint32_t clear_value)
 {
-  StorageBuf::clear(clear_value);
+  set_data_initialized();
 
   if (ssbo_id_ == 0) {
     this->init();
@@ -163,7 +163,7 @@ void GLStorageBuf::clear(uint32_t clear_value)
 
 void GLStorageBuf::copy_sub(VertBuf *src_, uint dst_offset, uint src_offset, uint copy_size)
 {
-  StorageBuf::copy_sub(src_, dst_offset, src_offset, copy_size);
+  set_data_initialized();
 
   GLVertBuf *src = static_cast<GLVertBuf *>(src_);
   GLStorageBuf *dst = this;

@@ -65,12 +65,7 @@ GPUStorageBuf *GPU_storagebuf_create_ex(size_t size,
     ssbo->update(data);
   }
   else if (G.debug & G_DEBUG_GPU) {
-    /* Fill the buffer with poison values.
-     * (NaN for floats, -1 for `int` and "max value" for `uint`). */
-    blender::Vector<uchar> uninitialized_data(size, 0xFF);
-    ssbo->update(uninitialized_data.data());
-    /* `update` tags the buffer data as initialized so we revert that. */
-    ssbo->force_data_uninitialized();
+    ssbo->poison_fill();
   }
 
   if (usage == GPU_USAGE_DEVICE_ONLY) {

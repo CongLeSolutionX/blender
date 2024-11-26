@@ -22,7 +22,7 @@ VKStorageBuffer::VKStorageBuffer(size_t size, GPUUsageType usage, const char *na
 
 void VKStorageBuffer::update(const void *data)
 {
-  StorageBuf::update(data);
+  set_data_initialized();
 
   VKContext &context = *VKContext::get();
   ensure_allocated();
@@ -51,7 +51,7 @@ void VKStorageBuffer::allocate()
 
 void VKStorageBuffer::bind(int slot)
 {
-  StorageBuf::bind(slot);
+  check_data_initialization_on_bind(slot);
 
   VKContext &context = *VKContext::get();
   context.state_manager_get().storage_buffer_bind(
@@ -68,7 +68,7 @@ void VKStorageBuffer::unbind()
 
 void VKStorageBuffer::clear(uint32_t clear_value)
 {
-  StorageBuf::clear(clear_value);
+  set_data_initialized();
 
   ensure_allocated();
   VKContext &context = *VKContext::get();
@@ -77,7 +77,7 @@ void VKStorageBuffer::clear(uint32_t clear_value)
 
 void VKStorageBuffer::copy_sub(VertBuf *src, uint dst_offset, uint src_offset, uint copy_size)
 {
-  StorageBuf::copy_sub(src, dst_offset, src_offset, copy_size);
+  set_data_initialized();
 
   ensure_allocated();
 
