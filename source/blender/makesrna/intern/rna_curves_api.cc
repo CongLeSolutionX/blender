@@ -138,7 +138,7 @@ bool rna_CurvesGeometry_reorder_curves(blender::bke::CurvesGeometry &curves,
   }
   if (std::any_of(new_to_old_indices_map.begin(),
                   new_to_old_indices_map.end(),
-                  [&](const int index) { return !(index >= 0 && index < curves.curves_num()); }))
+                  [&](const int index) { return !curves.curves_range().contains(index); }))
   {
     BKE_report(reports, RPT_ERROR, "Reorder indices must be valid");
     return false;
