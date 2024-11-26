@@ -82,7 +82,6 @@ struct WeightedNormalData {
   blender::Span<int> corner_edges;
   blender::Span<int> loop_to_face;
   blender::MutableSpan<blender::short2> clnors;
-  bool has_clnors; /* True if clnors already existed, false if we had to create them. */
 
   blender::OffsetIndices<int> faces;
   blender::Span<blender::float3> face_normals;
@@ -206,7 +205,6 @@ static void apply_weights_vertex_normal(WeightedNormalModifierData *wnmd,
   const short mode = wn_data->mode;
   ModePair *mode_pair = wn_data->mode_pair;
 
-  const bool has_clnors = wn_data->has_clnors;
   bke::mesh::CornerNormalSpaceArray lnors_spacearr;
 
   const bool keep_sharp = (wnmd->flag & MOD_WEIGHTEDNORMAL_KEEP_SHARP) != 0;
@@ -511,7 +509,6 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   const Span<int> loop_to_face_map = result->corner_to_face_map();
 
   bke::MutableAttributeAccessor attributes = result->attributes_for_write();
-  const bool has_clnors = attributes.contains("custom_normal");
 
   bke::SpanAttributeWriter<bool> sharp_edges = attributes.lookup_or_add_for_write_span<bool>(
       "sharp_edge", bke::AttrDomain::Edge);
@@ -533,7 +530,6 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   wn_data.corner_edges = corner_edges;
   wn_data.loop_to_face = loop_to_face_map;
   wn_data.clnors = clnors.span;
-  wn_data.has_clnors = has_clnors;
 
   wn_data.faces = faces;
   wn_data.face_normals = mesh->face_normals();
