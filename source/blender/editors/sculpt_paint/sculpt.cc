@@ -7380,6 +7380,7 @@ GroupedSpan<int> calc_vert_neighbors(const SubdivCCG &subdiv_ccg,
   SubdivCCGNeighbors neighbors;
 
   r_offset_data.resize(key.grid_area * grids.size() + 1);
+  r_data.clear();
 
   for (const int i : grids.index_range()) {
     const int grid = grids[i];
@@ -7407,6 +7408,7 @@ GroupedSpan<BMVert *> calc_vert_neighbors(Set<BMVert *, 0> verts,
                                           Vector<BMVert *> &r_data)
 {
   r_offset_data.resize(verts.size() + 1);
+  r_data.clear();
 
   Vector<BMVert *, 64> neighbor_data;
   int i = 0;

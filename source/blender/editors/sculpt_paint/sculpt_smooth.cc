@@ -455,11 +455,12 @@ void calc_relaxed_translations_faces(const Span<float3> vert_positions,
   Vector<int> neighbors;
 
   for (const int i : verts.index_range()) {
-    vert_neighbors_get_mesh(faces, corner_verts, vert_to_face_map, hide_poly, verts[i], neighbors);
     if (factors[i] == 0.0f) {
       translations[i] = float3(0);
       continue;
     }
+
+    vert_neighbors_get_mesh(faces, corner_verts, vert_to_face_map, hide_poly, verts[i], neighbors);
 
     /* Don't modify corner vertices */
     if (neighbors.size() <= 2) {
