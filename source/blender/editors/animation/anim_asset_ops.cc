@@ -29,7 +29,9 @@
 #include "BLT_translation.hh"
 
 #include "ANIM_action.hh"
+#include "ANIM_action_iterators.hh"
 #include "ANIM_keyframing.hh"
+#include "ANIM_rna.hh"
 
 #include "AS_asset_catalog.hh"
 #include "AS_asset_catalog_tree.hh"
@@ -302,26 +304,78 @@ void POSELIB_OT_asset_create(wmOperatorType *ot)
       prop, visit_library_prop_catalogs_catalog_for_search_fn, PROP_STRING_SEARCH_SUGGESTION);
 }
 
+static bAction *action_from_selected_asset(bContext *C)
+{
+  const AssetRepresentationHandle *asset_handle = CTX_wm_asset(C);
+  if (!asset_handle) {
+    return nullptr;
+  }
+
+  if (asset_handle->get_id_type() != ID_AC) {
+    return nullptr;
+  }
+
+  AssetWeakReference asset_reference = asset_handle->make_weak_reference();
+  Main *bmain = CTX_data_main(C);
+  return reinterpret_cast<bAction *>(
+      bke::asset_edit_id_from_weak_reference(*bmain, ID_AC, asset_reference));
+}
+
+static void update_pose_action_from_scene(blender::animrig::Action &action, Object &pose_object)
+{
+  if (action.slot_array_num < 1) {
+    /* All actions should have slots at this point. */
+    BLI_assert_unreachable();
+    return;
+  }
+
+  Set<RNAPath> existing_paths;
+  blender::animrig::foreach_fcurve_in_action_slot(
+      action, action.slot_array[0]->handle, [&](FCurve &fcurve) {
+        existing_paths.add({fcurve.rna_path, std::nullopt, fcurve.array_index});
+      });
+
+  LISTBASE_FOREACH (bPoseChannel *, pose_bone, &pose_object.pose->chanbase) {
+    if (!(pose_bone->bone->flag & BONE_SELECTED)) {
+      continue;
+    }
+    PointerRNA bone_pointer = RNA_pointer_create(&pose_object.id, &RNA_PoseBone, pose_bone);
+    PointerRNA resolved_pointer;
+    PropertyRNA *resolved_property;
+    if (!RNA_path_resolve(&bone_pointer, "location", &resolved_pointer, &resolved_property)) {
+      continue;
+    }
+    Vector<float> values = blender::animrig::get_rna_values(&resolved_pointer, resolved_property);
+  }
+}
+
 static int pose_asset_overwrite_exec(bContext *C, wmOperator *op)
 {
+  bAction *action = action_from_selected_asset(C);
+  BLI_assert_msg(action, "Poll should have checked action exists");
+
+  Main *bmain = CTX_data_main(C);
+  Object *pose_object = CTX_data_active_object(C);
+  if (!pose_object || !pose_object->pose) {
+    return OPERATOR_CANCELLED;
+  }
+
+  update_pose_action_from_scene(action->wrap(), *pose_object);
+
+  bke::asset_edit_id_save(*bmain, action->id, *op->reports);
+
+  WM_main_add_notifier(NC_ASSET | ND_ASSET_LIST | NA_EDITED, nullptr);
+
   return OPERATOR_FINISHED;
 }
 
 static bool pose_asset_overwrite_poll(bContext *C)
 {
-  const AssetRepresentationHandle *asset_handle = CTX_wm_asset(C);
-  if (!asset_handle) {
+  if (!ED_operator_posemode_context(C)) {
     return false;
   }
 
-  if (asset_handle->get_id_type() != ID_AC) {
-    return false;
-  }
-
-  AssetWeakReference asset_reference = asset_handle->make_weak_reference();
-  Main *bmain = CTX_data_main(C);
-  bAction *action = reinterpret_cast<bAction *>(
-      bke::asset_edit_id_from_weak_reference(*bmain, ID_AC, asset_reference));
+  bAction *action = action_from_selected_asset(C);
 
   if (!action) {
     return false;

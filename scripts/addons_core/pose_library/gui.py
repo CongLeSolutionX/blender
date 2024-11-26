@@ -58,6 +58,8 @@ class VIEW3D_AST_pose_library(bpy.types.AssetShelf):
         props.select = False
 
         layout.separator()
+        layout.operator("poselib.asset_overwrite")
+        layout.separator()
         layout.operator("asset.open_containing_blend_file")
 
 
