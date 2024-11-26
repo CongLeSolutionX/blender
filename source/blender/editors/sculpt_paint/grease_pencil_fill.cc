@@ -41,6 +41,8 @@
 
 #include "GPU_state.hh"
 
+#include "grease_pencil_intern.hh"
+
 #include <list>
 #include <optional>
 
@@ -650,7 +652,9 @@ static bke::CurvesGeometry boundary_to_curves(const Scene &scene,
         pressure, &brush, brush.gpencil_settings);
   }
 
-  if (scene.toolsettings->gp_paint->mode == GPPAINT_FLAG_USE_VERTEXCOLOR) {
+  const bool use_vertex_color = ed::sculpt_paint::greasepencil::brush_using_vertex_color(
+      scene.toolsettings->gp_paint, &brush);
+  if (use_vertex_color) {
     ColorGeometry4f vertex_color;
     srgb_to_linearrgb_v3_v3(vertex_color, brush.rgb);
     vertex_color.a = brush.gpencil_settings->vertex_factor;
@@ -1031,7 +1035,9 @@ bke::CurvesGeometry fill_strokes(const ViewContext &view_context,
                                                   max_zoom_factor,
                                                   margin);
   /* Scale stroke radius by half to hide gaps between filled areas and boundaries. */
-  const float radius_scale = 0.5f;
+  const float radius_scale = (brush.gpencil_settings->fill_draw_mode == GP_FILL_DMODE_CONTROL) ?
+                                 0.0f :
+                                 0.5f;
 
   constexpr const int min_image_size = 128;
   /* Pixel scale (aka. "fill_factor, aka. "Precision") to reduce image size. */
