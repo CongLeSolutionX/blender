@@ -45,15 +45,10 @@ class StorageBuf {
   virtual ~StorageBuf();
 
   virtual void update(const void *data) = 0;
-
   virtual void bind(int slot) = 0;
-
   virtual void unbind() = 0;
-
   virtual void clear(uint32_t clear_value) = 0;
-
   virtual void copy_sub(VertBuf *src, uint dst_offset, uint src_offset, uint copy_size) = 0;
-
   virtual void read(void *data) = 0;
   virtual void async_flush_to_host() = 0;
   virtual void sync_as_indirect_buffer() = 0;
