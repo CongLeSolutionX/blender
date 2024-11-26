@@ -1272,6 +1272,9 @@ static int write_id_direct_linked_data_process_cb(LibraryIDLinkCallbackData *cb_
   return IDWALK_RET_NOP;
 }
 
+/**
+ * Writes ID and all its direct data to the file.
+ */
 static void write_id(WriteData *wd, ID *id)
 {
   const IDTypeInfo *id_type = BKE_idtype_get_info_from_id(id);
@@ -1284,6 +1287,9 @@ static void write_id(WriteData *wd, ID *id)
   mywrite_id_end(wd, id);
 }
 
+/**
+ * Gathers all local IDs that should be written to the file.
+ */
 static blender::Vector<ID *> gather_local_ids_to_write(Main *bmain, const bool is_undo)
 {
   blender::Vector<ID *> local_ids_to_write;
