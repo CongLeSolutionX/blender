@@ -14,6 +14,8 @@
 #include "BLI_math_base.h"
 #include "BLI_utildefines.h"
 
+#include "BKE_global.hh"
+
 #include "GPU_batch.hh"
 #include "GPU_batch_presets.hh"
 #include "GPU_platform.hh"
@@ -370,6 +372,29 @@ blender::IndexRange GPU_batch_draw_expanded_parameter_get(const blender::gpu::Ba
   return blender::IndexRange(out_vertex_first, out_vertex_count);
 }
 
+void gpu_assert_frambuffer_shader_compatibility()
+{
+  if (!(G.debug & G_DEBUG_GPU)) {
+    return;
+  }
+
+  uint32_t fragment_output_bits = Context::get()->shader->fragment_output_bits;
+  if (fragment_output_bits == 0) {
+    return;
+  }
+  blender::Span<GPUAttachment> attachments = Context::get()->active_fb->attachments_get();
+  for (int i : attachments.index_range()) {
+    if (i < GPU_FB_COLOR_ATTACHMENT0) {
+      /* Skip depth/stencil */
+      continue;
+    }
+    if (attachments[i].tex) {
+      int color_index = i - GPU_FB_COLOR_ATTACHMENT0;
+      BLI_assert(fragment_output_bits & (1u << color_index));
+    }
+  }
+}
+
 void GPU_batch_draw(Batch *batch)
 {
   BLI_assert(batch != nullptr);
@@ -398,6 +423,7 @@ void GPU_batch_draw_advanced(
 {
   BLI_assert(gpu_batch != nullptr);
   BLI_assert(Context::get()->shader != nullptr);
+  gpu_assert_frambuffer_shader_compatibility();
   Batch *batch = static_cast<Batch *>(gpu_batch);
 
   if (vertex_count == 0) {
@@ -429,6 +455,7 @@ void GPU_batch_draw_indirect(Batch *gpu_batch, GPUStorageBuf *indirect_buf, intp
   BLI_assert(gpu_batch != nullptr);
   BLI_assert(Context::get()->shader != nullptr);
   BLI_assert(indirect_buf != nullptr);
+  gpu_assert_frambuffer_shader_compatibility();
   Batch *batch = static_cast<Batch *>(gpu_batch);
 
   batch->draw_indirect(indirect_buf, offset);
@@ -440,6 +467,7 @@ void GPU_batch_multi_draw_indirect(
   BLI_assert(gpu_batch != nullptr);
   BLI_assert(Context::get()->shader != nullptr);
   BLI_assert(indirect_buf != nullptr);
+  gpu_assert_frambuffer_shader_compatibility();
   Batch *batch = static_cast<Batch *>(gpu_batch);
 
   batch->multi_draw_indirect(indirect_buf, count, offset, stride);

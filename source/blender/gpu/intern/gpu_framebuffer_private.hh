@@ -250,6 +250,11 @@ class FrameBuffer {
   {
     return use_explicit_load_store_;
   }
+
+  inline Span<GPUAttachment> attachments_get() const
+  {
+    return Span(attachments_, GPU_FB_MAX_ATTACHMENT);
+  }
 };
 
 /* Syntactic sugar. */
