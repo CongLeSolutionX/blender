@@ -1680,9 +1680,9 @@ Channelbag &StripKeyframeData::channelbag_for_slot_add(const Slot &slot)
 
 Channelbag &StripKeyframeData::channelbag_for_slot_ensure(const Slot &slot)
 {
-  Channelbag *channel_bag = this->channelbag_for_slot(slot);
-  if (channel_bag != nullptr) {
-    return *channel_bag;
+  Channelbag *channelbag = this->channelbag_for_slot(slot);
+  if (channelbag != nullptr) {
+    return *channelbag;
   }
   return this->channelbag_for_slot_add(slot);
 }
@@ -2022,7 +2022,7 @@ Channelbag::Channelbag(const Channelbag &other)
   for (int i = 0; i < other.group_array_num; i++) {
     const bActionGroup *group_src = other.group_array[i];
     this->group_array[i] = static_cast<bActionGroup *>(MEM_dupallocN(group_src));
-    this->group_array[i]->channel_bag = this;
+    this->group_array[i]->channelbag = this;
   }
 
   /* BKE_fcurve_copy() resets the FCurve's group pointer. Which is good, because the groups are
@@ -2135,7 +2135,7 @@ bActionGroup &Channelbag::channel_group_create(StringRefNull name)
   }
   new_group->fcurve_range_start = fcurve_index;
 
-  new_group->channel_bag = this;
+  new_group->channelbag = this;
 
   /* Make it selected. */
   new_group->flag = AGRP_SELECTED;
@@ -2267,7 +2267,7 @@ void Channelbag::restore_channel_group_invariants()
 
 bool ChannelGroup::is_legacy() const
 {
-  return this->channel_bag == nullptr;
+  return this->channelbag == nullptr;
 }
 
 Span<FCurve *> ChannelGroup::fcurves()
@@ -2278,8 +2278,8 @@ Span<FCurve *> ChannelGroup::fcurves()
     return {};
   }
 
-  return this->channel_bag->wrap().fcurves().slice(this->fcurve_range_start,
-                                                   this->fcurve_range_length);
+  return this->channelbag->wrap().fcurves().slice(this->fcurve_range_start,
+                                                  this->fcurve_range_length);
 }
 
 Span<const FCurve *> ChannelGroup::fcurves() const
@@ -2290,8 +2290,8 @@ Span<const FCurve *> ChannelGroup::fcurves() const
     return {};
   }
 
-  return this->channel_bag->wrap().fcurves().slice(this->fcurve_range_start,
-                                                   this->fcurve_range_length);
+  return this->channelbag->wrap().fcurves().slice(this->fcurve_range_start,
+                                                  this->fcurve_range_length);
 }
 
 /* Utility function implementations. */
@@ -2957,12 +2957,12 @@ void move_slot(Main &bmain, Slot &source_slot, Action &from_action, Action &to_a
   clone_slot(source_slot, target_slot);
   slot_identifier_ensure_unique(to_action, target_slot);
 
-  Channelbag *channel_bag = from_strip_data.channelbag_for_slot(source_slot.handle);
-  BLI_assert(channel_bag != nullptr);
-  channel_bag->slot_handle = target_slot.handle;
+  Channelbag *channelbag = from_strip_data.channelbag_for_slot(source_slot.handle);
+  BLI_assert(channelbag != nullptr);
+  channelbag->slot_handle = target_slot.handle;
   grow_array_and_append<ActionChannelbag *>(
-      &to_strip_data.channelbag_array, &to_strip_data.channelbag_array_num, channel_bag);
-  int index = from_strip_data.find_channelbag_index(*channel_bag);
+      &to_strip_data.channelbag_array, &to_strip_data.channelbag_array_num, channelbag);
+  int index = from_strip_data.find_channelbag_index(*channelbag);
   shrink_array_and_remove<ActionChannelbag *>(
       &from_strip_data.channelbag_array, &from_strip_data.channelbag_array_num, index);
 

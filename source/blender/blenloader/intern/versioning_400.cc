@@ -149,7 +149,7 @@ static void convert_action_in_place(blender::animrig::Action &action)
   LISTBASE_FOREACH_INDEX (bActionGroup *, group, &action.groups, group_index) {
     bag.group_array[group_index] = group;
 
-    group->channel_bag = &bag;
+    group->channelbag = &bag;
     group->fcurve_range_start = fcurve_index;
 
     LISTBASE_FOREACH (FCurve *, fcu, &group->channels) {

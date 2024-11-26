@@ -1722,7 +1722,7 @@ static void rearrange_layered_action_channel_groups(bAnimContext *ac,
         if (!SEL_AGRP(group)) {
           continue;
         }
-        blender::animrig::Channelbag &bag = group->channel_bag->wrap();
+        blender::animrig::Channelbag &bag = group->channelbag->wrap();
         const int group_index = bag.channel_groups().first_index_try(group);
         const int to_index = group_index - 1;
         BLI_assert(group_index >= 0);
@@ -1747,7 +1747,7 @@ static void rearrange_layered_action_channel_groups(bAnimContext *ac,
         if (!SEL_AGRP(group)) {
           continue;
         }
-        blender::animrig::Channelbag &bag = group->channel_bag->wrap();
+        blender::animrig::Channelbag &bag = group->channelbag->wrap();
         bag.channel_group_move(*group, 0);
       }
       break;
@@ -1760,7 +1760,7 @@ static void rearrange_layered_action_channel_groups(bAnimContext *ac,
         if (!SEL_AGRP(group)) {
           continue;
         }
-        blender::animrig::Channelbag &bag = group->channel_bag->wrap();
+        blender::animrig::Channelbag &bag = group->channelbag->wrap();
         const int group_index = bag.channel_groups().first_index_try(group);
         const int to_index = group_index + 1;
         BLI_assert(group_index >= 0);
@@ -1785,7 +1785,7 @@ static void rearrange_layered_action_channel_groups(bAnimContext *ac,
         if (!SEL_AGRP(group)) {
           continue;
         }
-        blender::animrig::Channelbag &bag = group->channel_bag->wrap();
+        blender::animrig::Channelbag &bag = group->channelbag->wrap();
         bag.channel_group_move(*group, bag.channel_groups().size() - 1);
       }
       break;
@@ -1843,7 +1843,7 @@ static void rearrange_layered_action_fcurves(bAnimContext *ac,
     BLI_assert(bag != nullptr);
 
     bActionGroup group = {};
-    group.channel_bag = bag;
+    group.channelbag = bag;
     group.fcurve_range_start = 0;
     if (!bag->channel_groups().is_empty()) {
       bActionGroup *last_group = bag->channel_groups().last();
@@ -1874,7 +1874,7 @@ static void rearrange_layered_action_fcurves(bAnimContext *ac,
           continue;
         }
 
-        blender::animrig::Channelbag &bag = group.channel_bag->wrap();
+        blender::animrig::Channelbag &bag = group.channelbag->wrap();
         const int fcurve_index = bag.fcurves().first_index_try(fcurve);
         const int to_index = fcurve_index - 1;
 
@@ -1901,7 +1901,7 @@ static void rearrange_layered_action_fcurves(bAnimContext *ac,
           continue;
         }
 
-        blender::animrig::Channelbag &bag = group.channel_bag->wrap();
+        blender::animrig::Channelbag &bag = group.channelbag->wrap();
         bag.fcurve_move(*fcurve, group.fcurve_range_start);
       }
       return;
@@ -1917,7 +1917,7 @@ static void rearrange_layered_action_fcurves(bAnimContext *ac,
           continue;
         }
 
-        blender::animrig::Channelbag &bag = group.channel_bag->wrap();
+        blender::animrig::Channelbag &bag = group.channelbag->wrap();
         const int fcurve_index = bag.fcurves().first_index_try(fcurve);
         const int to_index = fcurve_index + 1;
 
@@ -1946,7 +1946,7 @@ static void rearrange_layered_action_fcurves(bAnimContext *ac,
           continue;
         }
 
-        blender::animrig::Channelbag &bag = group.channel_bag->wrap();
+        blender::animrig::Channelbag &bag = group.channelbag->wrap();
         bag.fcurve_move(*fcurve, group.fcurve_range_start + group.fcurve_range_length - 1);
       }
       return;
@@ -2534,7 +2534,7 @@ static int animchannels_ungroup_exec(bContext *C, wmOperator * /*op*/)
     }
 
     /* Layered action. */
-    fcu->grp->channel_bag->wrap().fcurve_ungroup(*fcu);
+    fcu->grp->channelbag->wrap().fcurve_ungroup(*fcu);
   }
 
   /* cleanup */
@@ -2673,7 +2673,7 @@ static int animchannels_delete_exec(bContext *C, wmOperator * /*op*/)
            * along with the group. This difference in behavior is replicated
            * from legacy actions. */
 
-          blender::animrig::Channelbag &channel_bag = agrp->channel_bag->wrap();
+          blender::animrig::Channelbag &channelbag = agrp->channelbag->wrap();
 
           /* Remove all the fcurves in the group, which also automatically
            * deletes the group when the last fcurve is deleted. Since the group
@@ -2683,7 +2683,7 @@ static int animchannels_delete_exec(bContext *C, wmOperator * /*op*/)
           const int fcurve_range_start = agrp->fcurve_range_start;
           const int fcurve_range_length = agrp->fcurve_range_length;
           for (int i = 0; i < fcurve_range_length; i++) {
-            channel_bag.fcurve_remove(*channel_bag.fcurve(fcurve_range_start));
+            channelbag.fcurve_remove(*channelbag.fcurve(fcurve_range_start));
           }
 
           DEG_id_tag_update_ex(CTX_data_main(C), &adt->action->id, ID_RECALC_ANIMATION);

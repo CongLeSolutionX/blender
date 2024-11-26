@@ -705,7 +705,7 @@ typedef struct bActionGroup {
    * This is needed in the keyframe drawing code, etc., to give direct access to
    * the fcurves in this group.
    */
-  struct ActionChannelbag *channel_bag;
+  struct ActionChannelbag *channelbag;
 
   /** Settings for this action-group. */
   int flag;

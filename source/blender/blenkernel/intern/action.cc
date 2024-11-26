@@ -559,7 +559,7 @@ static void read_channelbag(BlendDataReader *reader, animrig::Channelbag &channe
       reader, channelbag.group_array_num, reinterpret_cast<void **>(&channelbag.group_array));
   for (int i = 0; i < channelbag.group_array_num; i++) {
     BLO_read_struct(reader, bActionGroup, &channelbag.group_array[i]);
-    channelbag.group_array[i]->channel_bag = &channelbag;
+    channelbag.group_array[i]->channelbag = &channelbag;
 
     /* Clear the legacy channels #ListBase, since it will have been set for some
      * groups for forward compatibility.

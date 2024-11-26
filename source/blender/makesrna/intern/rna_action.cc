@@ -781,7 +781,7 @@ static void rna_ActionGroup_channels_begin(CollectionPropertyIterator *iter, Poi
   }
 
   /* Group from a layered action. */
-  animrig::Channelbag &cbag = group->channel_bag->wrap();
+  animrig::Channelbag &cbag = group->channelbag->wrap();
 
   custom_iter->tag = ActionGroupChannelsIterator::ARRAY;
   custom_iter->array.ptr = reinterpret_cast<char *>(cbag.fcurve_array + group->fcurve_range_start);
