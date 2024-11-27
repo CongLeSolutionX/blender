@@ -266,6 +266,8 @@ void immEnd()
     imm->batch = nullptr; /* don't free, batch belongs to caller */
   }
   else {
+    GPU_shader_bind(imm->shader);
+    Context::get()->assert_framebuffer_shader_compatibility();
     imm->end();
   }
 
