@@ -87,6 +87,8 @@ class FrameBuffer {
   bool dirty_state_ = true;
   /* Flag specifying the current bind operation should use explicit load-store state. */
   bool use_explicit_load_store_ = false;
+  /** Bitset indicating the color attachments slots in use. */
+  uint16_t color_attachments_bits_ = 0;
 
  public:
 #ifndef GPU_NO_USE_PY_REFERENCES
@@ -130,6 +132,19 @@ class FrameBuffer {
  protected:
   virtual void subpass_transition_impl(const GPUAttachmentState depth_attachment_state,
                                        Span<GPUAttachmentState> color_attachment_states) = 0;
+
+  inline void set_color_attachment_bit(GPUAttachmentType type, bool value)
+  {
+    if (type >= GPU_FB_COLOR_ATTACHMENT0) {
+      int color_index = type - GPU_FB_COLOR_ATTACHMENT0;
+      if (value) {
+        color_attachments_bits_ |= 1u << color_index;
+      }
+      else {
+        color_attachments_bits_ &= ~(1u << color_index);
+      }
+    }
+  }
 
  public:
   void subpass_transition(const GPUAttachmentState depth_attachment_state,
@@ -251,9 +266,9 @@ class FrameBuffer {
     return use_explicit_load_store_;
   }
 
-  inline Span<GPUAttachment> attachments_get() const
+  inline uint16_t get_color_attachments_bitset()
   {
-    return Span(attachments_, GPU_FB_MAX_ATTACHMENT);
+    return color_attachments_bits_;
   }
 };
 

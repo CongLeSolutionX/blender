@@ -112,9 +112,11 @@ void FrameBuffer::attachment_set(GPUAttachmentType type, const GPUAttachment &ne
   /* Might be null if this is for unbinding. */
   if (new_attachment.tex) {
     reinterpret_cast<Texture *>(new_attachment.tex)->attach_to(this, type);
+    set_color_attachment_bit(type, true);
   }
   else {
     /* GPU_ATTACHMENT_NONE */
+    set_color_attachment_bit(type, false);
   }
 
   attachment = new_attachment;
@@ -125,6 +127,7 @@ void FrameBuffer::attachment_remove(GPUAttachmentType type)
 {
   attachments_[type] = GPU_ATTACHMENT_NONE;
   dirty_attachments_ = true;
+  set_color_attachment_bit(type, false);
 }
 
 void FrameBuffer::subpass_transition(const GPUAttachmentState depth_attachment_state,

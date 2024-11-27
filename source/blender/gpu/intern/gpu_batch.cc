@@ -378,21 +378,14 @@ static void gpu_assert_framebuffer_shader_compatibility()
     return;
   }
 
-  uint32_t fragment_output_bits = Context::get()->shader->fragment_output_bits;
-  if (fragment_output_bits == 0) {
+  if (!(Context::get()->state_manager->state.write_mask & eGPUWriteMask::GPU_WRITE_COLOR)) {
     return;
   }
-  blender::Span<GPUAttachment> attachments = Context::get()->active_fb->attachments_get();
-  for (int i : attachments.index_range()) {
-    if (i < GPU_FB_COLOR_ATTACHMENT0) {
-      /* Skip depth/stencil */
-      continue;
-    }
-    if (attachments[i].tex) {
-      int color_index = i - GPU_FB_COLOR_ATTACHMENT0;
-      BLI_assert(fragment_output_bits & (1u << color_index));
-    }
-  }
+
+  uint16_t fragment_output_bits = Context::get()->shader->fragment_output_bits;
+  uint16_t fb_attachments_bits = Context::get()->active_fb->get_color_attachments_bitset();
+
+  BLI_assert((fb_attachments_bits & ~fragment_output_bits) == 0);
 }
 
 void GPU_batch_draw(Batch *batch)
