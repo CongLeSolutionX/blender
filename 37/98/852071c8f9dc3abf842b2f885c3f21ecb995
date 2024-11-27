@@ -1,3 +1,4 @@
 Referenced by commit 7191608a988d2243fd3ec7fb5fa1c94b59415e1d, Sculpt/Paint: Hide asset shelf by default in a few modes
 Referenced by issue #129116, Line stroke preview gizmo(?) not seen in 4.3
 Referenced by pull request #131005, Fix: Clone brush missing from image texture paint
+Referenced by commit a820e2d393a270b0ae5368701cb37eb3bbe2ae7e, Fix: Clone brush missing from image texture paint
