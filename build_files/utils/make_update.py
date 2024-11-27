@@ -613,7 +613,7 @@ def submodules_lib_update(args: argparse.Namespace, branch: "str | None") -> str
     return msg
 
 
-if __name__ == "__main__":
+def main():
     args = parse_arguments()
     blender_skip_msg = ""
     libraries_skip_msg = ""
@@ -658,3 +658,7 @@ if __name__ == "__main__":
     # you can use while working on uncommitted code.
     if submodules_skip_msg:
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

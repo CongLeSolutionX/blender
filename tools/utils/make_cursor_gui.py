@@ -288,9 +288,14 @@ class App:
 
 
 ################## Main App #######################
-root = Tk()
+def main():
+    root = Tk()
 
-app = App(root)
-root.title("Cursor Maker")
+    app = App(root)
+    root.title("Cursor Maker")
 
-root.mainloop()
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()

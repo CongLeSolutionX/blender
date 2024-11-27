@@ -12,13 +12,6 @@ Sorts CMake path lists
 import os
 import sys
 
-PWD = os.path.dirname(__file__)
-sys.path.append(os.path.join(PWD, "modules"))
-
-from batch_edit_text import run
-
-SOURCE_DIR = os.path.normpath(os.path.abspath(os.path.normpath(os.path.join(PWD, "..", ".."))))
-
 # TODO, move to config file
 SOURCE_DIRS = (
     "source",
@@ -93,9 +86,21 @@ def sort_cmake_file_lists(fn: str, data_src: str) -> str | None:
     return None
 
 
-run(
-    directories=[os.path.join(SOURCE_DIR, d) for d in SOURCE_DIRS],
-    is_text=lambda fn: fn.endswith("CMakeLists.txt"),
-    text_operation=sort_cmake_file_lists,
-    use_multiprocess=True,
-)
+def main():
+    PWD = os.path.dirname(__file__)
+    sys.path.append(os.path.join(PWD, "modules"))
+
+    from batch_edit_text import run
+
+    SOURCE_DIR = os.path.normpath(os.path.abspath(os.path.normpath(os.path.join(PWD, "..", ".."))))
+
+    run(
+        directories=[os.path.join(SOURCE_DIR, d) for d in SOURCE_DIRS],
+        is_text=lambda fn: fn.endswith("CMakeLists.txt"),
+        text_operation=sort_cmake_file_lists,
+        use_multiprocess=True,
+    )
+
+
+if __name__ == "__main__":
+    main()

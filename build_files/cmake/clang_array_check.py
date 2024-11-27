@@ -121,26 +121,33 @@ else:
     if CLANG_LIB_DIR is None:
         print("$CLANG_LIB_DIR clang lib dir not set")
 
-if CLANG_BIND_DIR:
-    sys.path.append(CLANG_BIND_DIR)
 
-import clang
-import clang.cindex
-from clang.cindex import (CursorKind,
-                          TypeKind,
-                          TokenKind)
+def clang_init():
+    if CLANG_BIND_DIR:
+        sys.path.append(CLANG_BIND_DIR)
 
-if CLANG_LIB_DIR:
-    clang.cindex.Config.set_library_path(CLANG_LIB_DIR)
+    import clang
+    import clang.cindex
+    from clang.cindex import (CursorKind,
+                              TypeKind,
+                              TokenKind)
 
-index = clang.cindex.Index.create()
+    if CLANG_LIB_DIR:
+        clang.cindex.Config.set_library_path(CLANG_LIB_DIR)
 
-args = sys.argv[2:]
-# print(args)
+    index = clang.cindex.Index.create()
 
-tu = index.parse(sys.argv[1], args)
-# print('Translation unit: %s' % tu.spelling)
-filepath = tu.spelling
+    args = sys.argv[2:]
+    # print(args)
+
+    tu = index.parse(sys.argv[1], args)
+    # print('Translation unit: %s' % tu.spelling)
+    filepath = tu.spelling
+
+    _defs = {}
+
+    return _defs, tu, filepath
+
 
 # -----------------------------------------------------------------------------
 
@@ -235,10 +242,9 @@ def function_get_arg_sizes(node):
 
 
 # -----------------------------------------------------------------------------
-_defs = {}
 
 
-def lookup_function_size_def(func_id):
+def lookup_function_size_def(_defs, func_id):
     if USE_LAZY_INIT:
         result = _defs.get(func_id, {})
         if type(result) != dict:
@@ -250,7 +256,7 @@ def lookup_function_size_def(func_id):
 # -----------------------------------------------------------------------------
 
 
-def file_check_arg_sizes(tu):
+def file_check_arg_sizes(_defs, tu, filepath):
 
     # main checking function
     def validate_arg_size(node):
@@ -291,7 +297,7 @@ def file_check_arg_sizes(tu):
             tok = list(func.get_tokens())
             if tok:
                 func_id = tok[0].spelling
-                args_size_definition = lookup_function_size_def(func_id)
+                args_size_definition = lookup_function_size_def(_defs, func_id)
 
         if not args_size_definition:
             return
@@ -365,7 +371,7 @@ def file_check_arg_sizes(tu):
 # -- first pass, cache function definitions sizes
 
 # PRINT FUNC DEFINES
-def recursive_arg_sizes(node, ):
+def recursive_arg_sizes(_defs, node):
     # print(node.kind, node.spelling)
     if node.kind == CursorKind.FUNCTION_DECL:
         if USE_LAZY_INIT:
@@ -377,12 +383,19 @@ def recursive_arg_sizes(node, ):
         _defs[node.spelling] = args_sizes
         # print("adding", node.spelling)
     for c in node.get_children():
-        recursive_arg_sizes(c)
+        recursive_arg_sizes(_defs, c)
 
 
-# cache function sizes
-recursive_arg_sizes(tu.cursor)
-_defs.update(defs_precalc)
+def main():
+    _defs, tu, filepath = clang_init()
 
-# --- second pass, check against def's
-file_check_arg_sizes(tu)
+    # cache function sizes
+    recursive_arg_sizes(_defs, tu.cursor)
+    _defs.update(defs_precalc)
+
+    # --- second pass, check against def's
+    file_check_arg_sizes(_defs, tu)
+
+
+if __name__ == "__main__":
+    main()
