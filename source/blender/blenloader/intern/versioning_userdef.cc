@@ -10,7 +10,10 @@
 #define DNA_DEPRECATED_ALLOW
 #include <cstring>
 
+#include "fmt/format.h"
+
 #include "BLI_listbase.h"
+#include "BLI_map.hh"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
@@ -32,12 +35,12 @@
 #include "BKE_keyconfig.h"
 #include "BKE_main.hh"
 #include "BKE_preferences.h"
-#include "BLI_map.hh"
 
 #include "BLO_readfile.hh"
 #include "BLO_userdef_default.h"
 
 #include "BLT_translation.hh"
+
 #include "DNA_brush_enums.h"
 
 #include "GPU_platform.hh"
@@ -48,7 +51,6 @@
 
 #include "WM_keymap.hh"
 #include "WM_types.hh"
-#include "fmt/format.h"
 #include "wm_event_types.hh"
 
 /* Don't use translation strings in versioning!
@@ -321,9 +323,8 @@ static void keymap_update_brushes(
       IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "name");
       if (idprop && (idprop->type == IDP_STRING)) {
         const char *prop_val = IDP_String(idprop);
-        if (!STRPREFIX(prop_val, "builtin_brush."))
-        {
-            continue;
+        if (!STRPREFIX(prop_val, "builtin_brush.")) {
+          continue;
         }
         if (tool_asset_map.contains(prop_val)) {
           asset_id = tool_asset_map.lookup(prop_val);
@@ -357,16 +358,15 @@ static void keymap_update_brushes(
     }
     else if (tool_id) {
       WM_keymap_item_properties_reset(kmi, nullptr);
-      IDP_AddToGroup(
-          kmi->properties,
-          blender::bke::idprop::create("name", *tool_id).release());
+      IDP_AddToGroup(kmi->properties, blender::bke::idprop::create("name", *tool_id).release());
     }
   }
 }
 
 static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
 {
-  constexpr blender::StringRef asset_prefix = "brushes/essentials_brushes-mesh_sculpt.blend/Brush/";
+  constexpr blender::StringRef asset_prefix =
+      "brushes/essentials_brushes-mesh_sculpt.blend/Brush/";
   constexpr blender::StringRef tool_property = "sculpt_tool";
 
   static auto tool_asset_map = []() {
@@ -449,12 +449,14 @@ static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
     return map;
   }();
 
-  keymap_update_brushes(keymap, asset_prefix, tool_property, tool_tool_map, tool_asset_map, id_asset_map);
+  keymap_update_brushes(
+      keymap, asset_prefix, tool_property, tool_tool_map, tool_asset_map, id_asset_map);
 }
 
 static void keymap_update_mesh_vertex_paint_brushes(wmKeyMap *keymap)
 {
-  constexpr blender::StringRef asset_prefix = "brushes/essentials_brushes-mesh_vertex.blend/Brush/";
+  constexpr blender::StringRef asset_prefix =
+      "brushes/essentials_brushes-mesh_vertex.blend/Brush/";
   constexpr blender::StringRef tool_property = "vertex_tool";
 
   static auto tool_tool_map = []() {
@@ -480,7 +482,8 @@ static void keymap_update_mesh_vertex_paint_brushes(wmKeyMap *keymap)
 
 static void keymap_update_mesh_weight_paint_brushes(wmKeyMap *keymap)
 {
-  constexpr blender::StringRef asset_prefix = "brushes/essentials_brushes-mesh_weight.blend/Brush/";
+  constexpr blender::StringRef asset_prefix =
+      "brushes/essentials_brushes-mesh_weight.blend/Brush/";
   constexpr blender::StringRef tool_property = "weight_tool";
 
   static auto tool_tool_map = []() {
@@ -506,7 +509,8 @@ static void keymap_update_mesh_weight_paint_brushes(wmKeyMap *keymap)
 
 static void keymap_update_mesh_texture_paint_brushes(wmKeyMap *keymap)
 {
-  constexpr blender::StringRef asset_prefix = "brushes/essentials_brushes-mesh_texture.blend/Brush/";
+  constexpr blender::StringRef asset_prefix =
+      "brushes/essentials_brushes-mesh_texture.blend/Brush/";
   constexpr blender::StringRef tool_property = "image_tool";
 
   static auto tool_tool_map = []() {
