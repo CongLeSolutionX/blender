@@ -9,6 +9,7 @@
 #pragma once
 
 #include "BKE_movieclip.h"
+#include "BKE_object.hh"
 
 #include "BLI_function_ref.hh"
 
@@ -47,7 +48,6 @@ struct State {
   const SpaceLink *space_data;
   const ARegion *region;
   const RegionView3D *rv3d;
-  const Base *active_base;
   DRWTextStore *dt;
   View3DOverlay overlay;
   float pixelsize;
@@ -58,6 +58,18 @@ struct State {
   bool clear_in_front;
   bool use_in_front;
   bool is_wireframe_mode;
+  /** Whether we are rendering for an image (viewport render). */
+  bool is_viewport_image_render;
+  /** Whether we are rendering for an image. */
+  bool is_image_render;
+  /** True if rendering only to query the depth. Can be for auto-depth rotation. */
+  bool is_depth_only_drawing;
+  /** When drag-dropping material onto objects to assignment. */
+  bool is_material_select;
+  /** Whether we should render the background or leave it transparent. */
+  bool draw_background;
+  /** Should text draw in this mode? */
+  bool show_text;
   bool hide_overlays;
   bool xray_enabled;
   bool xray_enabled_and_not_wire;
@@ -78,15 +90,106 @@ struct State {
   float2 image_uv_aspect;
   float2 image_aspect;
 
-  float view_dist_get(const float4x4 &winmat) const
+  /* Data to save per overlay to not rely on rv3d for rendering.
+   * TODO(fclem): Compute offset directly from the view. */
+  struct ViewOffsetData {
+    /* Copy of rv3d->dist. */
+    float dist;
+    /* Copy of rv3d->persp. */
+    char persp;
+    /* Copy of rv3d->is_persp. */
+    bool is_persp;
+  };
+
+  ViewOffsetData offset_data_get() const
   {
-    float view_dist = rv3d->dist;
+    if (rv3d == nullptr) {
+      return {0.0f, 0, false};
+    }
+    return {rv3d->dist, rv3d->persp, rv3d->is_persp != 0};
+  }
+
+  static float view_dist_get(const ViewOffsetData &offset_data, const float4x4 &winmat)
+  {
+    float view_dist = offset_data.dist;
     /* Special exception for orthographic camera:
      * `view_dist` isn't used as the depth range isn't the same. */
-    if (rv3d->persp == RV3D_CAMOB && rv3d->is_persp == false) {
+    if (offset_data.persp == RV3D_CAMOB && offset_data.is_persp == false) {
       view_dist = 1.0f / max_ff(fabsf(winmat[0][0]), fabsf(winmat[1][1]));
     }
     return view_dist;
+  }
+
+  /** Convenience functions. */
+
+  bool is_space_v3d() const
+  {
+    return this->space_type == SPACE_VIEW3D;
+  }
+  bool is_space_image() const
+  {
+    return this->space_type == SPACE_IMAGE;
+  }
+  bool is_space_node() const
+  {
+    return this->space_type == SPACE_NODE;
+  }
+
+  bool show_extras() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_HIDE_OBJECT_XTRAS) == 0;
+  }
+  bool show_face_orientation() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_FACE_ORIENTATION);
+  }
+  bool show_bone_selection() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_BONE_SELECT);
+  }
+  bool show_wireframes() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_WIREFRAMES);
+  }
+  bool show_motion_paths() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_HIDE_MOTION_PATHS) == 0;
+  }
+  bool show_bones() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_HIDE_BONES) == 0;
+  }
+  bool show_object_origins() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_HIDE_OBJECT_ORIGINS) == 0;
+  }
+  bool show_fade_inactive() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_FADE_INACTIVE);
+  }
+  bool show_attribute_viewer() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_VIEWER_ATTRIBUTE);
+  }
+  bool show_attribute_viewer_text() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_VIEWER_ATTRIBUTE_TEXT);
+  }
+  bool show_sculpt_mask() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_SCULPT_SHOW_MASK);
+  }
+  bool show_sculpt_face_sets() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_SCULPT_SHOW_FACE_SETS);
+  }
+  bool show_sculpt_curves_cage() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_SCULPT_CURVES_CAGE);
+  }
+  bool show_light_colors() const
+  {
+    return (this->overlay.flag & V3D_OVERLAY_SHOW_LIGHT_COLORS);
   }
 };
 
@@ -215,7 +318,7 @@ class ShaderModule {
   ShaderPtr curve_edit_handles = shader("overlay_edit_curves_handle_next");
   ShaderPtr extra_point;
   ShaderPtr facing;
-  ShaderPtr grid = shader("overlay_grid");
+  ShaderPtr grid = shader("overlay_grid_next");
   ShaderPtr grid_background;
   ShaderPtr grid_grease_pencil = shader("overlay_gpencil_canvas");
   ShaderPtr grid_image;
@@ -297,6 +400,7 @@ class ShaderModule {
   ShaderPtr image_plane_depth_bias;
   ShaderPtr lattice_points;
   ShaderPtr lattice_wire;
+  ShaderPtr light_spot_cone;
   ShaderPtr particle_dot;
   ShaderPtr particle_shape;
   ShaderPtr particle_hair;
@@ -321,6 +425,16 @@ class ShaderModule {
   ShaderPtr selectable_shader(const char *create_info_name);
   ShaderPtr selectable_shader(const char *create_info_name,
                               FunctionRef<void(gpu::shader::ShaderCreateInfo &info)> patch);
+};
+
+struct GreasePencilDepthPlane {
+  /* Plane data to reference as push constant.
+   * Will be computed just before drawing. */
+  float4 plane;
+  /* Center and size of the bounding box of the Grease Pencil object. */
+  Bounds<float3> bounds;
+  /* Gpencil object resource handle. */
+  ResourceHandle handle;
 };
 
 struct Resources : public select::SelectMap {
@@ -353,6 +467,7 @@ struct Resources : public select::SelectMap {
   TextureFromPool overlay_tx = {"overlay_tx"};
   /* Target containing depth of overlays when xray is enabled. */
   TextureFromPool xray_depth_tx = {"xray_depth_tx"};
+  TextureFromPool xray_depth_in_front_tx = {"xray_depth_in_front_tx"};
 
   /* Texture that are usually allocated inside. These are fallback when they aren't.
    * They are then wrapped inside the #TextureRefs below. */
@@ -363,6 +478,14 @@ struct Resources : public select::SelectMap {
   /* 1px texture containing only maximum depth. To be used for fulfilling bindings when depth
    * texture is not available or not needed. */
   Texture dummy_depth_tx = {"dummy_depth_tx"};
+
+  /* Global vector for all grease pencil depth planes.
+   * Managed by the grease pencil overlay module.
+   * This is to avoid passing the grease pencil overlay class to other overlay and
+   * keep draw_grease_pencil as a static function.
+   * Memory is reference, so we have to use a container with fixed memory. */
+  detail::SubPassVector<GreasePencilDepthPlane, 16> depth_planes;
+  int64_t depth_planes_count = 0;
 
   /** TODO(fclem): Copy of G_data.block that should become theme colors only and managed by the
    * engine. */
@@ -392,8 +515,12 @@ struct Resources : public select::SelectMap {
 
   Vector<MovieClip *> bg_movie_clips;
 
-  Resources(const SelectionType selection_type_, ShaderModule &shader_module)
-      : select::SelectMap(selection_type_), shaders(shader_module){};
+  const ShapeCache &shapes;
+
+  Resources(const SelectionType selection_type_,
+            ShaderModule &shader_module,
+            const ShapeCache &shapes_)
+      : select::SelectMap(selection_type_), shaders(shader_module), shapes(shapes_){};
 
   ~Resources()
   {
@@ -406,14 +533,101 @@ struct Resources : public select::SelectMap {
     free_movieclips_textures();
   }
 
+  void acquire(const State &state, DefaultTextureList &viewport_textures)
+  {
+    this->depth_tx.wrap(viewport_textures.depth);
+    this->depth_in_front_tx.wrap(viewport_textures.depth_in_front);
+    this->color_overlay_tx.wrap(viewport_textures.color_overlay);
+    this->color_render_tx.wrap(viewport_textures.color);
+
+    this->render_fb = DRW_viewport_framebuffer_list_get()->default_fb;
+    this->render_in_front_fb = DRW_viewport_framebuffer_list_get()->in_front_fb;
+
+    int2 render_size = int2(this->depth_tx.size());
+
+    if (state.xray_enabled) {
+      /* For X-ray we render the scene to a separate depth buffer. */
+      this->xray_depth_tx.acquire(render_size, GPU_DEPTH24_STENCIL8);
+      this->depth_target_tx.wrap(this->xray_depth_tx);
+      /* TODO(fclem): Remove mandatory allocation. */
+      this->xray_depth_in_front_tx.acquire(render_size, GPU_DEPTH24_STENCIL8);
+      this->depth_target_in_front_tx.wrap(this->xray_depth_in_front_tx);
+    }
+    else {
+      /* TODO(fclem): Remove mandatory allocation. */
+      if (!this->depth_in_front_tx.is_valid()) {
+        this->depth_in_front_alloc_tx.acquire(render_size, GPU_DEPTH24_STENCIL8);
+        this->depth_in_front_tx.wrap(this->depth_in_front_alloc_tx);
+      }
+      this->depth_target_tx.wrap(this->depth_tx);
+      this->depth_target_in_front_tx.wrap(this->depth_in_front_tx);
+    }
+
+    /* TODO: Better semantics using a switch? */
+    if (!this->color_overlay_tx.is_valid()) {
+      /* Likely to be the selection case. Allocate dummy texture and bind only depth buffer. */
+      this->color_overlay_alloc_tx.acquire(int2(1, 1), GPU_SRGB8_A8);
+      this->color_render_alloc_tx.acquire(int2(1, 1), GPU_SRGB8_A8);
+
+      this->color_overlay_tx.wrap(this->color_overlay_alloc_tx);
+      this->color_render_tx.wrap(this->color_render_alloc_tx);
+
+      this->line_tx.acquire(int2(1, 1), GPU_RGBA8);
+      this->overlay_tx.acquire(int2(1, 1), GPU_SRGB8_A8);
+
+      this->overlay_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_tx));
+      this->overlay_line_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_tx));
+      this->overlay_in_front_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_tx));
+      this->overlay_line_in_front_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_tx));
+    }
+    else {
+      eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE |
+                               GPU_TEXTURE_USAGE_ATTACHMENT;
+      this->line_tx.acquire(render_size, GPU_RGBA8, usage);
+      this->overlay_tx.acquire(render_size, GPU_SRGB8_A8, usage);
+
+      this->overlay_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_tx),
+                              GPU_ATTACHMENT_TEXTURE(this->overlay_tx));
+      this->overlay_line_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_tx),
+                                   GPU_ATTACHMENT_TEXTURE(this->overlay_tx),
+                                   GPU_ATTACHMENT_TEXTURE(this->line_tx));
+      this->overlay_in_front_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_in_front_tx),
+                                       GPU_ATTACHMENT_TEXTURE(this->overlay_tx));
+      this->overlay_line_in_front_fb.ensure(GPU_ATTACHMENT_TEXTURE(this->depth_target_in_front_tx),
+                                            GPU_ATTACHMENT_TEXTURE(this->overlay_tx),
+                                            GPU_ATTACHMENT_TEXTURE(this->line_tx));
+    }
+
+    this->overlay_line_only_fb.ensure(GPU_ATTACHMENT_NONE,
+                                      GPU_ATTACHMENT_TEXTURE(this->overlay_tx),
+                                      GPU_ATTACHMENT_TEXTURE(this->line_tx));
+    this->overlay_color_only_fb.ensure(GPU_ATTACHMENT_NONE,
+                                       GPU_ATTACHMENT_TEXTURE(this->overlay_tx));
+    /* The v2d path writes to the overlay output directly, but it needs a depth attachment. */
+    this->overlay_output_fb.ensure(state.is_space_image() ?
+                                       GPUAttachment GPU_ATTACHMENT_TEXTURE(this->depth_tx) :
+                                       GPUAttachment GPU_ATTACHMENT_NONE,
+                                   GPU_ATTACHMENT_TEXTURE(this->color_overlay_tx));
+  }
+
+  void release()
+  {
+    this->line_tx.release();
+    this->overlay_tx.release();
+    this->xray_depth_tx.release();
+    this->xray_depth_in_front_tx.release();
+    this->depth_in_front_alloc_tx.release();
+    this->color_overlay_alloc_tx.release();
+    this->color_render_alloc_tx.release();
+  }
+
   ThemeColorID object_wire_theme_id(const ObjectRef &ob_ref, const State &state) const
   {
     const bool is_edit = (state.object_mode & OB_MODE_EDIT) &&
                          (ob_ref.object->mode & OB_MODE_EDIT);
-    const bool active = (state.active_base != nullptr) &&
-                        ((ob_ref.dupli_parent != nullptr) ?
-                             (state.active_base->object == ob_ref.dupli_parent) :
-                             (state.active_base->object == ob_ref.object));
+    const bool active = ((ob_ref.dupli_parent != nullptr) ?
+                             (state.object_active == ob_ref.dupli_parent) :
+                             (state.object_active == ob_ref.object));
     const bool is_selected = ((ob_ref.object->base_flag & BASE_SELECTED) != 0);
 
     /* Object in edit mode. */
@@ -513,6 +727,73 @@ struct Resources : public select::SelectMap {
       BKE_movieclip_free_gputexture(clip);
     }
   }
+
+  /** Convenience functions. */
+
+  /* Returns true if drawing for any selection mode. */
+  bool is_selection() const
+  {
+    return this->selection_type != SelectionType::DISABLED;
+  }
+};
+
+/* List of flat objects drawcalls.
+ * In order to not loose selection display of flat objects view from the side,
+ * we store them in a list and add them to the pass just in time if their flat side is
+ * perpendicular to the view. */
+/* Reference to a flat object.
+ * Allow deferred rendering condition of flat object for special purpose. */
+struct FlatObjectRef {
+  gpu::Batch *geom;
+  ResourceHandle handle;
+  int flattened_axis_id;
+
+  /* Returns flat axis index if only one axis is flat. Returns -1 otherwise. */
+  static int flat_axis_index_get(const Object *ob)
+  {
+    BLI_assert(ELEM(ob->type,
+                    OB_MESH,
+                    OB_CURVES_LEGACY,
+                    OB_SURF,
+                    OB_FONT,
+                    OB_CURVES,
+                    OB_POINTCLOUD,
+                    OB_VOLUME));
+
+    float dim[3];
+    BKE_object_dimensions_get(ob, dim);
+    if (dim[0] == 0.0f) {
+      return 0;
+    }
+    if (dim[1] == 0.0f) {
+      return 1;
+    }
+    if (dim[2] == 0.0f) {
+      return 2;
+    }
+    return -1;
+  }
+
+  using Callback = FunctionRef<void(gpu::Batch *geom, ResourceHandle handle)>;
+
+  /* Execute callback for every handles that is orthogonal to the view.
+   * Note: Only works in orthogonal view. */
+  void if_flat_axis_orthogonal_to_view(Manager &manager, const View &view, Callback callback) const
+  {
+    const float4x4 &object_to_world =
+        manager.matrix_buf.current().get_or_resize(handle.resource_index()).model;
+
+    float3 view_forward = view.forward();
+    float3 axis_not_flat_a = (flattened_axis_id == 0) ? object_to_world.y_axis() :
+                                                        object_to_world.x_axis();
+    float3 axis_not_flat_b = (flattened_axis_id == 1) ? object_to_world.z_axis() :
+                                                        object_to_world.y_axis();
+    float3 axis_flat = math::cross(axis_not_flat_a, axis_not_flat_b);
+
+    if (math::abs(math::dot(view_forward, axis_flat)) < 1e-3f) {
+      callback(geom, handle);
+    }
+  }
 };
 
 /**
@@ -575,7 +856,7 @@ struct VertexPrimitiveBuf {
 
   void append(const float3 &position, const float4 &color)
   {
-    data_buf.append({float4(position), color});
+    data_buf.append({float4(position, 0.0f), color});
   }
 
   void end_sync(PassSimple::Sub &pass, GPUPrimType primitive)
@@ -659,5 +940,19 @@ struct LinePrimitiveBuf : public VertexPrimitiveBuf {
     VertexPrimitiveBuf::end_sync(pass, GPU_PRIM_LINES);
   }
 };
+
+/* Consider instance any object form a set or a dupli system.
+ * This hides some overlay to avoid making the viewport unreadable. */
+static inline bool is_from_dupli_or_set(const Object *ob)
+{
+  return ob->base_flag & (BASE_FROM_SET | BASE_FROM_DUPLI);
+}
+
+/* Consider instance any object form a set or a dupli system.
+ * This hides some overlay to avoid making the viewport unreadable. */
+static inline bool is_from_dupli_or_set(const ObjectRef &ob_ref)
+{
+  return is_from_dupli_or_set(ob_ref.object);
+}
 
 }  // namespace blender::draw::overlay

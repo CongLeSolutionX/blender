@@ -13,11 +13,21 @@
 
 #include "draw_common.hh"
 
+#include "overlay_next_base.hh"
 #include "overlay_next_mesh.hh"
 
 namespace blender::draw::overlay {
 
-class Wireframe {
+/**
+ * Draw wireframe of objects.
+ *
+ * The object wireframe can be drawn because of:
+ * - display option (Object > Viewport Display > Wireframe)
+ * - overlay option (Viewport Overlays > Geometry > Wireframe)
+ * - display as (Object > Viewport Display > Wire)
+ * - wireframe shading mode
+ */
+class Wireframe : Overlay {
  private:
   PassMain wireframe_ps_ = {"Wireframe"};
   struct ColoringPass {
@@ -35,20 +45,17 @@ class Wireframe {
   /* Force display of wireframe on surface objects, regardless of the object display settings. */
   bool show_wire_ = false;
 
-  bool enabled_ = false;
-
  public:
-  void begin_sync(Resources &res, const State &state)
+  void begin_sync(Resources &res, const State &state) final
   {
-    enabled_ = (state.space_type == SPACE_VIEW3D) &&
-               (state.is_wireframe_mode || !state.hide_overlays);
+    enabled_ = state.is_space_v3d() && (state.is_wireframe_mode || !state.hide_overlays);
     if (!enabled_) {
       return;
     }
 
-    show_wire_ = state.is_wireframe_mode || (state.overlay.flag & V3D_OVERLAY_WIREFRAMES);
+    show_wire_ = state.is_wireframe_mode || state.show_wireframes();
 
-    const bool is_selection = res.selection_type != SelectionType::DISABLED;
+    const bool is_selection = res.is_selection();
     const bool do_smooth_lines = (U.gpu_flag & USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE) != 0;
     const bool is_transform = (G.moving & G_TRANSFORM_OBJ) != 0;
     const float wire_threshold = wire_discard_threshold_get(state.overlay.wireframe_threshold);
@@ -64,6 +71,7 @@ class Wireframe {
     {
       auto &pass = wireframe_ps_;
       pass.init();
+      pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
       pass.state_set(DRW_STATE_FIRST_VERTEX_CONVENTION | DRW_STATE_WRITE_COLOR |
                          DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL,
                      state.clipping_plane_count);
@@ -76,7 +84,6 @@ class Wireframe {
               sub.specialize_constant(shader, "use_custom_depth_bias", do_smooth_lines);
             }
             sub.shader_set(shader);
-            sub.bind_ubo("globalsBlock", &res.globals_buf);
             sub.bind_texture("depthTex", depth_tex);
             sub.push_constant("wireOpacity", state.overlay.wireframe_opacity);
             sub.push_constant("isTransform", is_transform);
@@ -100,11 +107,12 @@ class Wireframe {
     }
   }
 
-  void object_sync(Manager &manager,
-                   const ObjectRef &ob_ref,
-                   const State &state,
-                   Resources &res,
-                   const bool in_edit_paint_mode)
+  void object_sync_ex(Manager &manager,
+                      const ObjectRef &ob_ref,
+                      Resources &res,
+                      const State &state,
+                      const bool in_edit_paint_mode,
+                      const bool in_edit_mode)
   {
     if (!enabled_) {
       return;
@@ -150,37 +158,43 @@ class Wireframe {
         }
         break;
       }
-      case OB_MESH:
-        if (BKE_sculptsession_use_pbvh_draw(ob_ref.object, state.rv3d)) {
-          ResourceHandle handle = manager.unique_handle(ob_ref);
+      case OB_MESH: {
+        bool has_edit_cage = Meshes::mesh_has_edit_cage(ob_ref.object);
 
-          for (SculptBatch &batch : sculpt_batches_get(ob_ref.object, SCULPT_BATCH_WIREFRAME)) {
-            coloring.mesh_all_edges_ps_->draw(batch.batch, handle);
+        if (show_surface_wire) {
+          if (BKE_sculptsession_use_pbvh_draw(ob_ref.object, state.rv3d)) {
+            ResourceHandle handle = manager.unique_handle(ob_ref);
+
+            for (SculptBatch &batch : sculpt_batches_get(ob_ref.object, SCULPT_BATCH_WIREFRAME)) {
+              coloring.mesh_all_edges_ps_->draw(batch.batch, handle);
+            }
           }
-        }
-        else {
-          if (show_surface_wire) {
+          else if (!in_edit_mode || has_edit_cage) {
+            /* Only draw the wireframe in edit mode if object has edit cage.
+             * Otherwise the wireframe will conflict with the edit cage drawing and produce
+             * unpleasant aliasing. */
             gpu::Batch *geom = DRW_cache_mesh_face_wireframe_get(ob_ref.object);
             (all_edges ? coloring.mesh_all_edges_ps_ : coloring.mesh_ps_)
                 ->draw(geom, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
           }
+        }
 
-          /* Draw loose geometry. */
-          if (!in_edit_paint_mode || Meshes::mesh_has_edit_cage(ob_ref.object)) {
-            const Mesh *mesh = static_cast<const Mesh *>(ob_ref.object->data);
-            gpu::Batch *geom;
-            if ((mesh->edges_num == 0) && (mesh->verts_num > 0)) {
-              geom = DRW_cache_mesh_all_verts_get(ob_ref.object);
-              coloring.pointcloud_ps_->draw(
-                  geom, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
-            }
-            else if ((geom = DRW_cache_mesh_loose_edges_get(ob_ref.object))) {
-              coloring.mesh_all_edges_ps_->draw(
-                  geom, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
-            }
+        /* Draw loose geometry. */
+        if (!in_edit_paint_mode || has_edit_cage) {
+          const Mesh *mesh = static_cast<const Mesh *>(ob_ref.object->data);
+          gpu::Batch *geom;
+          if ((mesh->edges_num == 0) && (mesh->verts_num > 0)) {
+            geom = DRW_cache_mesh_all_verts_get(ob_ref.object);
+            coloring.pointcloud_ps_->draw(
+                geom, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
+          }
+          else if ((geom = DRW_cache_mesh_loose_edges_get(ob_ref.object))) {
+            coloring.mesh_all_edges_ps_->draw(
+                geom, manager.unique_handle(ob_ref), res.select_id(ob_ref).get());
           }
         }
         break;
+      }
       case OB_POINTCLOUD: {
         if (show_surface_wire) {
           gpu::Batch *geom = DRW_pointcloud_batch_cache_get_dots(ob_ref.object);
@@ -191,6 +205,9 @@ class Wireframe {
       }
       case OB_VOLUME: {
         gpu::Batch *geom = DRW_cache_volume_face_wireframe_get(ob_ref.object);
+        if (geom == nullptr) {
+          break;
+        }
         if (static_cast<Volume *>(ob_ref.object->data)->display.wireframe_type ==
             VOLUME_WIREFRAME_POINTS)
         {
@@ -210,7 +227,7 @@ class Wireframe {
     }
   }
 
-  void pre_draw(Manager &manager, View &view)
+  void pre_draw(Manager &manager, View &view) final
   {
     if (!enabled_) {
       return;
@@ -219,28 +236,31 @@ class Wireframe {
     manager.generate_commands(wireframe_ps_, view);
   }
 
-  void draw(Framebuffer &framebuffer, Resources &res, Manager &manager, View &view)
+  void copy_depth(TextureRef &depth_tx)
+  {
+    if (!enabled_ || !do_depth_copy_workaround_) {
+      return;
+    }
+
+    eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
+    int2 render_size = int2(depth_tx.size());
+    tmp_depth_tx_.acquire(render_size, GPU_DEPTH24_STENCIL8, usage);
+
+    /* WORKAROUND: Nasty framebuffer copy.
+     * We should find a way to have nice wireframe without this. */
+    GPU_texture_copy(tmp_depth_tx_, depth_tx);
+  }
+
+  void draw_line(Framebuffer &framebuffer, Manager &manager, View &view) final
   {
     if (!enabled_) {
       return;
     }
 
-    if (do_depth_copy_workaround_) {
-      eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
-      int2 render_size = int2(res.depth_tx.size());
-      tmp_depth_tx_.acquire(render_size, GPU_DEPTH24_STENCIL8, usage);
-
-      /* WORKAROUND: Nasty framebuffer copy.
-       * We should find a way to have nice wireframe without this. */
-      GPU_texture_copy(tmp_depth_tx_, res.depth_tx);
-    }
-
     GPU_framebuffer_bind(framebuffer);
     manager.submit_only(wireframe_ps_, view);
 
-    if (do_depth_copy_workaround_) {
-      tmp_depth_tx_.release();
-    }
+    tmp_depth_tx_.release();
   }
 
  private:

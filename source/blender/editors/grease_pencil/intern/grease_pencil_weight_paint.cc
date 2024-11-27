@@ -535,7 +535,7 @@ static int weight_sample_invoke(bContext *C, wmOperator * /*op*/, const wmEvent 
 
   /* Set the new brush weight. */
   const ToolSettings *ts = vc.scene->toolsettings;
-  Brush *brush = BKE_paint_brush(&ts->wpaint->paint);
+  Brush *brush = BKE_paint_brush(&ts->gp_weightpaint->paint);
   BKE_brush_weight_set(vc.scene, brush, new_weight);
 
   /* Update brush settings in UI. */
@@ -912,7 +912,7 @@ static int vertex_group_normalize_all_exec(bContext *C, wmOperator *op)
       Vector<bool> vertex_group_is_included;
       LISTBASE_FOREACH (bDeformGroup *, dg, &curves.vertex_group_names) {
         vertex_group_is_locked.append(object_locked_defgroups.contains(dg->name));
-        /* Dummy, needed for the #normalize_vertex_weights() call.*/
+        /* Dummy, needed for the #normalize_vertex_weights() call. */
         vertex_group_is_included.append(true);
       }
 

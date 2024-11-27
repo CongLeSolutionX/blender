@@ -260,8 +260,10 @@ class GHOST_DeviceVK {
     VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering = {};
     dynamic_rendering.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
     dynamic_rendering.dynamicRendering = VK_TRUE;
-    dynamic_rendering.pNext = device_create_info_p_next;
-    device_create_info_p_next = &dynamic_rendering;
+    if (has_extensions({VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME})) {
+      dynamic_rendering.pNext = device_create_info_p_next;
+      device_create_info_p_next = &dynamic_rendering;
+    }
 
     VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT
         dynamic_rendering_unused_attachments = {};
@@ -544,7 +546,18 @@ GHOST_TSuccess GHOST_ContextVK::swapBuffers()
 
   assert(vulkan_device.has_value() && vulkan_device->device != VK_NULL_HANDLE);
   VkDevice device = vulkan_device->device;
-  vkAcquireNextImageKHR(device, m_swapchain, UINT64_MAX, VK_NULL_HANDLE, m_fence, &s_currentImage);
+
+  /* Some platforms (NVIDIA/Wayland) can receive an out of date swapchain when acquiring the next
+   * swapchain image. Other do it when calling vkQueuePresent. */
+  VkResult result = VK_ERROR_OUT_OF_DATE_KHR;
+  while (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    result = vkAcquireNextImageKHR(
+        device, m_swapchain, UINT64_MAX, VK_NULL_HANDLE, m_fence, &s_currentImage);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+      destroySwapchain();
+      createSwapchain();
+    }
+  }
   VK_CHECK(vkWaitForFences(device, 1, &m_fence, VK_TRUE, UINT64_MAX));
   VK_CHECK(vkResetFences(device, 1, &m_fence));
 
@@ -567,7 +580,7 @@ GHOST_TSuccess GHOST_ContextVK::swapBuffers()
   present_info.pImageIndices = &s_currentImage;
   present_info.pResults = nullptr;
 
-  VkResult result = VK_SUCCESS;
+  result = VK_SUCCESS;
   {
     std::scoped_lock lock(vulkan_device->queue_mutex);
     result = vkQueuePresentKHR(m_present_queue, &present_info);
@@ -989,10 +1002,7 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
 
     required_device_extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
   }
-  required_device_extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-  /* NOTE: marking this as an optional extension, but is actually required. RenderDoc doesn't
-   * create a device with this extension, but seems to work when not requesting the extension.
-   */
+  optional_device_extensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
   optional_device_extensions.push_back(VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME);
   optional_device_extensions.push_back(VK_EXT_SHADER_STENCIL_EXPORT_EXTENSION_NAME);
   optional_device_extensions.push_back(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);

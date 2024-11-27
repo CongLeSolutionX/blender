@@ -25,6 +25,8 @@
 namespace blender::gpu {
 class VKBackend;
 
+/* TODO: Split into VKWorkarounds and VKExtensions to remove the negating when an extension isn't
+ * supported. */
 struct VKWorkarounds {
   /**
    * Some devices don't support pixel formats that are aligned to 24 and 48 bits.
@@ -60,6 +62,11 @@ struct VKWorkarounds {
    * If set to true, the backend would inject a geometry shader to produce barycentric coordinates.
    */
   bool fragment_shader_barycentric = false;
+
+  /**
+   * Is the workarounds for devices that don't support VK_KHR_dynamic_rendering enabled.
+   */
+  bool dynamic_rendering = false;
 
   /**
    * Is the workarounds for devices that don't support VK_EXT_dynamic_rendering_unused_attachments
@@ -316,8 +323,10 @@ class VKDevice : public NonCopyable {
    * graph update. A dependency graph update from the viewport during playback or editing;
    * or a dependency graph update when rendering.
    * These can happen from a different thread which will don't have a context at all.
+   * \param thread_safe: Caller thread already owns the resources mutex and is safe to run this
+   * function without trying to reacquire resources mutex making a deadlock.
    */
-  VKDiscardPool &discard_pool_for_current_thread();
+  VKDiscardPool &discard_pool_for_current_thread(bool thread_safe = false);
 
   void context_register(VKContext &context);
   void context_unregister(VKContext &context);
@@ -326,6 +335,8 @@ class VKDevice : public NonCopyable {
   void memory_statistics_get(int *r_total_mem_kb, int *r_free_mem_kb) const;
   static void debug_print(std::ostream &os, const VKDiscardPool &discard_pool);
   void debug_print();
+
+  void free_command_pool_buffers(VkCommandPool vk_command_pool);
 
   /** \} */
 
