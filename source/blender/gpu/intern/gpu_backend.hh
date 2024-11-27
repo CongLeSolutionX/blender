@@ -10,8 +10,8 @@
 
 #pragma once
 
+#include "BLI_color.hh"
 #include "BLI_string_ref.hh"
-#include "GPU_debug.hh"
 #include "GPU_vertex_buffer.hh"
 
 namespace blender::gpu {
@@ -66,6 +66,8 @@ class GPUBackend {
 };
 
 namespace debug {
+static blender::ColorTheme4f GPU_DEBUG_GROUP_COLOR_DEFAULT = {};
+
 static ColorTheme4f get_debug_group_color(StringRefNull name)
 {
   if (name == "EEVEE") {

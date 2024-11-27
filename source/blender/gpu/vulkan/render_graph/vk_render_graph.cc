@@ -7,7 +7,7 @@
  */
 
 #include "vk_render_graph.hh"
-#include "GPU_debug.hh"
+#include "gpu_backend.hh"
 
 namespace blender::gpu::render_graph {
 
@@ -106,7 +106,9 @@ void VKRenderGraph::wait_synchronization_event(VkFence vk_fence)
 void VKRenderGraph::debug_group_begin(const char *name, const ColorTheme4f &color)
 {
   ColorTheme4f useColor = color;
-  if ((color == GPU_DEBUG_GROUP_COLOR_DEFAULT) && (debug_.group_stack.size() > 0)) {
+  if ((color == blender::gpu::debug::GPU_DEBUG_GROUP_COLOR_DEFAULT) &&
+      (debug_.group_stack.size() > 0))
+  {
     useColor = debug_.groups[debug_.group_stack.last()].color;
   }
   DebugGroupNameID name_id = debug_.groups.index_of_or_add({std::string(name), useColor});
