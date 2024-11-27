@@ -6,6 +6,7 @@
  * \ingroup edtransform
  */
 
+#include "DNA_brush_types.h"
 #include "DNA_gpencil_legacy_types.h"
 
 #include "BLI_blenlib.h"
@@ -24,6 +25,7 @@
 #include "BKE_mask.h"
 #include "BKE_modifier.hh"
 #include "BKE_paint.hh"
+#include "BKE_screen.hh"
 
 #include "SEQ_transform.hh"
 
@@ -739,10 +741,10 @@ void freeTransCustomDataForMode(TransInfo *t)
 void postTrans(bContext *C, TransInfo *t)
 {
   if (t->draw_handle_view) {
-    ED_region_draw_cb_exit(t->region->type, t->draw_handle_view);
+    ED_region_draw_cb_exit(t->region->runtime->type, t->draw_handle_view);
   }
   if (t->draw_handle_pixel) {
-    ED_region_draw_cb_exit(t->region->type, t->draw_handle_pixel);
+    ED_region_draw_cb_exit(t->region->runtime->type, t->draw_handle_pixel);
   }
   if (t->draw_handle_cursor) {
     WM_paint_cursor_end(static_cast<wmPaintCursor *>(t->draw_handle_cursor));
@@ -762,9 +764,7 @@ void postTrans(bContext *C, TransInfo *t)
   if (t->data_len_all != 0) {
     FOREACH_TRANS_DATA_CONTAINER (t, tc) {
       /* Free data malloced per trans-data. */
-      if (ELEM(t->obedit_type, OB_CURVES_LEGACY, OB_SURF, OB_GPENCIL_LEGACY) ||
-          (t->spacetype == SPACE_GRAPH))
-      {
+      if (ELEM(t->obedit_type, OB_CURVES_LEGACY, OB_SURF) || (t->spacetype == SPACE_GRAPH)) {
         TransData *td = tc->data;
         for (int a = 0; a < tc->data_len; a++, td++) {
           if (td->flag & TD_BEZTRIPLE) {

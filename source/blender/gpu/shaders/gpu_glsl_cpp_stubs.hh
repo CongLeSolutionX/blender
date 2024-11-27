@@ -29,6 +29,7 @@
 
 #pragma once
 
+#include <cstdio>
 #include <type_traits>
 
 /* Some compilers complain about lack of return values. Keep it short. */
@@ -46,64 +47,87 @@ template<typename T, int Sz> struct VecBase {};
 template<typename T, int Sz> struct VecOp {
   using VecT = VecBase<T, Sz>;
 
-  T &operator[](int) RET;
-  const T &operator[](int) const RET;
+  const T &operator[](int) const
+  {
+    return *reinterpret_cast<const T *>(this);
+  }
+  T &operator[](int)
+  {
+    return *reinterpret_cast<T *>(this);
+  }
 
   VecT operator+() RET;
   VecT operator-() RET;
 
-  VecT operator+(VecT) RET;
-  VecT operator-(VecT) RET;
-  VecT operator/(VecT) RET;
-  VecT operator*(VecT) RET;
+  friend VecT operator+(VecT, VecT) RET;
+  friend VecT operator-(VecT, VecT) RET;
+  friend VecT operator/(VecT, VecT) RET;
+  friend VecT operator*(VecT, VecT) RET;
 
-  VecT operator+=(VecT) RET;
-  VecT operator-=(VecT) RET;
-  VecT operator/=(VecT) RET;
-  VecT operator*=(VecT) RET;
-
-  VecT operator+(T) const RET;
-  VecT operator-(T) const RET;
-  VecT operator/(T) const RET;
-  VecT operator*(T) const RET;
-
-  VecT operator+=(T) const RET;
-  VecT operator-=(T) const RET;
-  VecT operator/=(T) const RET;
-  VecT operator*=(T) const RET;
+  friend VecT operator+(VecT, T) RET;
+  friend VecT operator-(VecT, T) RET;
+  friend VecT operator/(VecT, T) RET;
+  friend VecT operator*(VecT, T) RET;
 
   friend VecT operator+(T, VecT) RET;
   friend VecT operator-(T, VecT) RET;
   friend VecT operator/(T, VecT) RET;
   friend VecT operator*(T, VecT) RET;
 
+  friend VecT operator+=(VecT, VecT) RET;
+  friend VecT operator-=(VecT, VecT) RET;
+  friend VecT operator/=(VecT, VecT) RET;
+  friend VecT operator*=(VecT, VecT) RET;
+
+  friend VecT operator+=(VecT, T) RET;
+  friend VecT operator-=(VecT, T) RET;
+  friend VecT operator/=(VecT, T) RET;
+  friend VecT operator*=(VecT, T) RET;
+
 #define INT_OP \
   template<typename U = T, typename std::enable_if_t<std::is_integral_v<U>> * = nullptr>
 
-  INT_OP VecT operator%(VecT) const RET;
-  INT_OP VecT operator&(VecT) const RET;
-  INT_OP VecT operator|(VecT) const RET;
-  INT_OP VecT operator^(VecT) const RET;
+  INT_OP friend VecT operator~(VecT) RET;
 
-  INT_OP VecT operator%=(VecT) const RET;
-  INT_OP VecT operator&=(VecT) const RET;
-  INT_OP VecT operator|=(VecT) const RET;
-  INT_OP VecT operator^=(VecT) const RET;
+  INT_OP friend VecT operator%(VecT, VecT) RET;
+  INT_OP friend VecT operator&(VecT, VecT) RET;
+  INT_OP friend VecT operator|(VecT, VecT) RET;
+  INT_OP friend VecT operator^(VecT, VecT) RET;
 
-  INT_OP VecT operator%(T) const RET;
-  INT_OP VecT operator&(T) const RET;
-  INT_OP VecT operator|(T) const RET;
-  INT_OP VecT operator^(T) const RET;
-
-  INT_OP VecT operator%=(T) const RET;
-  INT_OP VecT operator&=(T) const RET;
-  INT_OP VecT operator|=(T) const RET;
-  INT_OP VecT operator^=(T) const RET;
+  INT_OP friend VecT operator%(VecT, T) RET;
+  INT_OP friend VecT operator&(VecT, T) RET;
+  INT_OP friend VecT operator|(VecT, T) RET;
+  INT_OP friend VecT operator^(VecT, T) RET;
 
   INT_OP friend VecT operator%(T, VecT) RET;
   INT_OP friend VecT operator&(T, VecT) RET;
   INT_OP friend VecT operator|(T, VecT) RET;
   INT_OP friend VecT operator^(T, VecT) RET;
+
+  INT_OP friend VecT operator%=(VecT, VecT) RET;
+  INT_OP friend VecT operator&=(VecT, VecT) RET;
+  INT_OP friend VecT operator|=(VecT, VecT) RET;
+  INT_OP friend VecT operator^=(VecT, VecT) RET;
+
+  INT_OP friend VecT operator%=(VecT, T) RET;
+  INT_OP friend VecT operator&=(VecT, T) RET;
+  INT_OP friend VecT operator|=(VecT, T) RET;
+  INT_OP friend VecT operator^=(VecT, T) RET;
+
+  INT_OP friend VecT operator<<(VecT, VecT) RET;
+  INT_OP friend VecT operator>>(VecT, VecT) RET;
+  INT_OP friend VecT operator<<=(VecT, VecT) RET;
+  INT_OP friend VecT operator>>=(VecT, VecT) RET;
+
+  INT_OP friend VecT operator<<(T, VecT) RET;
+  INT_OP friend VecT operator>>(T, VecT) RET;
+  INT_OP friend VecT operator<<=(T, VecT) RET;
+  INT_OP friend VecT operator>>=(T, VecT) RET;
+
+  INT_OP friend VecT operator<<(VecT, T) RET;
+  INT_OP friend VecT operator>>(VecT, T) RET;
+  INT_OP friend VecT operator<<=(VecT, T) RET;
+  INT_OP friend VecT operator>>=(VecT, T) RET;
 
 #undef INT_OP
 };
@@ -242,6 +266,8 @@ template<> struct VecBase<bool, 2> : VecSwizzle2<bool> {
   VecBase() = default;
   explicit VecBase(bool) {}
   explicit VecBase(bool, bool) {}
+  /* Should be forbidden, but is used by SMAA. */
+  explicit VecBase(VecBase<double, 2>) {}
 };
 
 template<> struct VecBase<bool, 3> : VecSwizzle3<bool> {
@@ -336,8 +362,17 @@ template<int C, int R> struct MatOp {
   using ColT = VecBase<double, R>;
   using RowT = VecBase<double, C>;
 
-  ColT &operator[](int) RET;
-  const ColT &operator[](int) const RET;
+  const ColT &operator[](int) const
+  {
+    return *reinterpret_cast<const ColT *>(this);
+  }
+  ColT &operator[](int)
+  {
+    return *reinterpret_cast<ColT *>(this);
+  }
+
+  MatT operator+() RET;
+  MatT operator-() RET;
 
   MatT operator*(MatT) const RET;
 
@@ -406,6 +441,26 @@ using mat3 = float3x3;
 using mat4 = float4x4;
 
 using MAT4 = float4x4;
+using MAT3 = float3x3;
+
+/* Matrix reshaping functions. */
+#define RESHAPE(mat_to, mat_from, ...) \
+  mat_to to_##mat_to(mat_from m) \
+  { \
+    return mat_to(__VA_ARGS__); \
+  }
+
+/* clang-format off */
+RESHAPE(float2x2, float3x3, m[0].xy, m[1].xy)
+RESHAPE(float2x2, float4x4, m[0].xy, m[1].xy)
+RESHAPE(float3x3, float4x4, m[0].xyz, m[1].xyz, m[2].xyz)
+RESHAPE(float3x3, float2x2, m[0].x, m[0].y, 0, m[1].x, m[1].y, 0, 0, 0, 1)
+RESHAPE(float4x4, float2x2, m[0].x, m[0].y, 0, 0, m[1].x, m[1].y, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+RESHAPE(float4x4, float3x3, m[0].x, m[0].y, m[0].z, 0, m[1].x, m[1].y, m[1].z, 0, m[2].x, m[2].y, m[2].z, 0, 0, 0, 0, 1)
+/* clang-format on */
+/* TODO(fclem): Remove. Use Transform instead. */
+RESHAPE(float3x3, float3x4, m[0].xyz, m[1].xyz, m[2].xyz)
+#undef RESHAPE
 
 /** \} */
 
@@ -433,13 +488,14 @@ template<typename T, int Dimensions, bool Cube = false, bool Array = false> stru
            typename DataVec = typename T::data_vec_type, \
            typename SizeVec = typename T::size_vec_type>
 
-TEX_TEMPLATE SizeVec textureSize(T, int) {}
-TEX_TEMPLATE DataVec texelFetch(T, IntCoord, int) {}
-TEX_TEMPLATE DataVec texelFetchOffset(T, IntCoord, int, IntCoord) {}
-TEX_TEMPLATE DataVec texture(T, FltCoord, double /*bias*/ = 0.0) {}
-TEX_TEMPLATE DataVec textureGather(T, FltCoord) {}
-TEX_TEMPLATE DataVec textureGrad(T, FltCoord, DerivVec, DerivVec) {}
-TEX_TEMPLATE DataVec textureLod(T, FltCoord, double) {}
+TEX_TEMPLATE SizeVec textureSize(T, int) RET;
+TEX_TEMPLATE DataVec texelFetch(T, IntCoord, int) RET;
+TEX_TEMPLATE DataVec texelFetchOffset(T, IntCoord, int, IntCoord) RET;
+TEX_TEMPLATE DataVec texture(T, FltCoord, double /*bias*/ = 0.0) RET;
+TEX_TEMPLATE DataVec textureGather(T, FltCoord) RET;
+TEX_TEMPLATE DataVec textureGrad(T, FltCoord, DerivVec, DerivVec) RET;
+TEX_TEMPLATE DataVec textureLod(T, FltCoord, double) RET;
+TEX_TEMPLATE DataVec textureLodOffset(T, FltCoord, double, IntCoord) RET;
 
 #undef TEX_TEMPLATE
 
@@ -470,6 +526,16 @@ using usamplerCube = SamplerBase<uint, 2, true>;
 using samplerCubeArray = SamplerBase<double, 2, true, true>;
 using isamplerCubeArray = SamplerBase<int, 2, true, true>;
 using usamplerCubeArray = SamplerBase<uint, 2, true, true>;
+
+using depth2D = sampler2D;
+using depth2DArray = sampler2DArray;
+using depthCube = samplerCube;
+using depthCubeArray = samplerCubeArray;
+
+/* Sampler Buffers do not have LOD. */
+float4 texelFetch(samplerBuffer, int) RET;
+int4 texelFetch(isamplerBuffer, int) RET;
+uint4 texelFetch(usamplerBuffer, int) RET;
 
 /** \} */
 
@@ -564,29 +630,29 @@ template<int D> VecBase<int, D> bitfieldInsert(VecBase<int, D>, VecBase<int, D>,
 template<int D> VecBase<int, D> bitfieldInsert(VecBase<uint, D>, VecBase<uint, D>, int, int) RET;
 template<int D> VecBase<int, D> bitfieldReverse(VecBase<int, D>) RET;
 template<int D> VecBase<int, D> bitfieldReverse(VecBase<uint, D>) RET;
-static inline int bitCount(int) RET;
-static inline int bitCount(uint) RET;
-static inline int bitfieldExtract(int) RET;
-static inline int bitfieldExtract(uint) RET;
-static inline int bitfieldInsert(int) RET;
-static inline int bitfieldInsert(uint) RET;
-static inline int bitfieldReverse(int) RET;
-static inline int bitfieldReverse(uint) RET;
+int bitCount(int) RET;
+int bitCount(uint) RET;
+int bitfieldExtract(int) RET;
+int bitfieldExtract(uint) RET;
+int bitfieldInsert(int) RET;
+int bitfieldInsert(uint) RET;
+int bitfieldReverse(int) RET;
+int bitfieldReverse(uint) RET;
 
 template<int D> VecBase<int, D> findLSB(VecBase<int, D>) RET;
 template<int D> VecBase<int, D> findLSB(VecBase<uint, D>) RET;
 template<int D> VecBase<int, D> findMSB(VecBase<int, D>) RET;
 template<int D> VecBase<int, D> findMSB(VecBase<uint, D>) RET;
-static inline int findMSB(int) RET;
-static inline int findMSB(uint) RET;
+int findMSB(int) RET;
+int findMSB(uint) RET;
 
 /* Math Functions. */
 template<typename T> T abs(T) RET;
-template<typename T> T clamp(T, T, T) RET;
 template<typename T> T max(T, T) RET;
 template<typename T> T min(T, T) RET;
 template<typename T> T sign(T) RET;
 template<typename T, typename U> T clamp(T, U, U) RET;
+template<typename T> T clamp(T, double, double) RET;
 template<typename T, typename U> T max(T, U) RET;
 template<typename T, typename U> T min(T, U) RET;
 /* TODO(fclem): These should be restricted to floats. */
@@ -595,6 +661,9 @@ template<typename T> T exp(T) RET;
 template<typename T> T exp2(T) RET;
 template<typename T> T floor(T) RET;
 template<typename T> T fma(T, T, T) RET;
+#ifndef _MSC_VER /* Avoid function redefinition which triggers a compile time error. */
+double fma(double, double, double) RET;
+#endif
 template<typename T> T fract(T) RET;
 template<typename T> T frexp(T, T) RET;
 template<typename T> T inversesqrt(T) RET;
@@ -602,17 +671,19 @@ template<typename T> T isinf(T) RET;
 template<typename T> T isnan(T) RET;
 template<typename T> T log(T) RET;
 template<typename T> T log2(T) RET;
-template<typename T> T mod(T, double);
-template<typename T> T mod(T, T);
+double mod(double, double) RET;
+template<int D> VecBase<double, D> mod(VecBase<double, D>, double) RET;
+template<int D> VecBase<double, D> mod(VecBase<double, D>, VecBase<double, D>) RET;
 template<typename T> T modf(T, T);
-template<typename T> T pow(T, T) RET;
+template<typename T, typename U> T pow(T, U) RET;
 template<typename T> T round(T) RET;
 template<typename T> T smoothstep(T, T, T) RET;
 template<typename T> T sqrt(T) RET;
-template<typename T> T step(T) RET;
+template<int D> VecBase<double, D> step(VecBase<double, D>, VecBase<double, D>) RET;
+template<int D> VecBase<double, D> step(double, VecBase<double, D>) RET;
 template<typename T> T trunc(T) RET;
 template<typename T, typename U> T ldexp(T, U) RET;
-static inline double smoothstep(double, double, double) RET;
+double smoothstep(double, double, double) RET;
 
 template<typename T> T acos(T) RET;
 template<typename T> T acosh(T) RET;
@@ -632,13 +703,15 @@ template<typename T> T degrees(T) RET;
 template<typename T> T radians(T) RET;
 
 /* Declared explicitly to avoid type errors. */
-static inline double mix(double, double, double) RET;
+double mix(double, double, double) RET;
 template<int D> VecBase<double, D> mix(VecBase<double, D>, VecBase<double, D>, double) RET;
+template<int D>
+VecBase<double, D> mix(VecBase<double, D>, VecBase<double, D>, VecBase<double, D>) RET;
 template<typename T, int D> VecBase<T, D> mix(VecBase<T, D>, VecBase<T, D>, VecBase<bool, D>) RET;
 
 #define select(A, B, C) mix(A, B, C)
 
-static inline VecBase<double, 3> cross(VecBase<double, 3>, VecBase<double, 3>) RET;
+VecBase<double, 3> cross(VecBase<double, 3>, VecBase<double, 3>) RET;
 template<int D> float dot(VecBase<double, D>, VecBase<double, D>) RET;
 template<int D> float distance(VecBase<double, D>, VecBase<double, D>) RET;
 template<int D> float length(VecBase<double, D>) RET;
@@ -648,10 +721,10 @@ template<int D> VecBase<int, D> floatBitsToInt(VecBase<double, D>) RET;
 template<int D> VecBase<uint, D> floatBitsToUint(VecBase<double, D>) RET;
 template<int D> VecBase<double, D> intBitsToFloat(VecBase<int, D>) RET;
 template<int D> VecBase<double, D> uintBitsToFloat(VecBase<uint, D>) RET;
-static inline int floatBitsToInt(double) RET;
-static inline uint floatBitsToUint(double) RET;
-static inline double intBitsToFloat(int) RET;
-static inline double uintBitsToFloat(uint) RET;
+int floatBitsToInt(double) RET;
+uint floatBitsToUint(double) RET;
+double intBitsToFloat(int) RET;
+double uintBitsToFloat(uint) RET;
 
 namespace gl_FragmentShader {
 /* Derivative functions. */
@@ -661,39 +734,40 @@ template<typename T> T fwidth(T) RET;
 }  // namespace gl_FragmentShader
 
 /* Geometric functions. */
-template<typename T, int D> float faceforward(VecBase<T, D>, VecBase<T, D>, VecBase<T, D>) RET;
-template<typename T, int D> float reflect(VecBase<T, D>, VecBase<T, D>) RET;
-template<typename T, int D> float refract(VecBase<T, D>, VecBase<T, D>, double) RET;
+template<typename T, int D>
+VecBase<T, D> faceforward(VecBase<T, D>, VecBase<T, D>, VecBase<T, D>) RET;
+template<typename T, int D> VecBase<T, D> reflect(VecBase<T, D>, VecBase<T, D>) RET;
+template<typename T, int D> VecBase<T, D> refract(VecBase<T, D>, VecBase<T, D>, double) RET;
 
 /* Atomic operations. */
-static inline int atomicAdd(int &, int) RET;
-static inline int atomicAnd(int &, int) RET;
-static inline int atomicOr(int &, int) RET;
-static inline int atomicXor(int &, int) RET;
-static inline int atomicMin(int &, int) RET;
-static inline int atomicMax(int &, int) RET;
-static inline int atomicExchange(int &, int) RET;
-static inline int atomicCompSwap(int &, int, int) RET;
-static inline uint atomicAdd(uint &, uint) RET;
-static inline uint atomicAnd(uint &, uint) RET;
-static inline uint atomicOr(uint &, uint) RET;
-static inline uint atomicXor(uint &, uint) RET;
-static inline uint atomicMin(uint &, uint) RET;
-static inline uint atomicMax(uint &, uint) RET;
-static inline uint atomicExchange(uint &, uint) RET;
-static inline uint atomicCompSwap(uint &, uint, uint) RET;
+int atomicAdd(int &, int) RET;
+int atomicAnd(int &, int) RET;
+int atomicOr(int &, int) RET;
+int atomicXor(int &, int) RET;
+int atomicMin(int &, int) RET;
+int atomicMax(int &, int) RET;
+int atomicExchange(int &, int) RET;
+int atomicCompSwap(int &, int, int) RET;
+uint atomicAdd(uint &, uint) RET;
+uint atomicAnd(uint &, uint) RET;
+uint atomicOr(uint &, uint) RET;
+uint atomicXor(uint &, uint) RET;
+uint atomicMin(uint &, uint) RET;
+uint atomicMax(uint &, uint) RET;
+uint atomicExchange(uint &, uint) RET;
+uint atomicCompSwap(uint &, uint, uint) RET;
 
 /* Packing functions. */
-static inline uint packHalf2x16(float2) RET;
-static inline uint packUnorm2x16(float2) RET;
-static inline uint packSnorm2x16(float2) RET;
-static inline uint packUnorm4x8(float4) RET;
-static inline uint packSnorm4x8(float4) RET;
-static inline float2 unpackHalf2x16(uint) RET;
-static inline float2 unpackUnorm2x16(uint) RET;
-static inline float2 unpackSnorm2x16(uint) RET;
-static inline float4 unpackUnorm4x8(uint) RET;
-static inline float4 unpackSnorm4x8(uint) RET;
+uint packHalf2x16(float2) RET;
+uint packUnorm2x16(float2) RET;
+uint packSnorm2x16(float2) RET;
+uint packUnorm4x8(float4) RET;
+uint packSnorm4x8(float4) RET;
+float2 unpackHalf2x16(uint) RET;
+float2 unpackUnorm2x16(uint) RET;
+float2 unpackSnorm2x16(uint) RET;
+float4 unpackUnorm4x8(uint) RET;
+float4 unpackSnorm4x8(uint) RET;
 
 /* Matrices functions. */
 template<int C, int R> float determinant(MatBase<C, R>) RET;
@@ -701,9 +775,9 @@ template<int C, int R> MatBase<C, R> inverse(MatBase<C, R>) RET;
 template<int C, int R> MatBase<R, C> transpose(MatBase<C, R>) RET;
 
 /* TODO(@fclem): Should be in a lib instead of being implemented by each backend. */
-static inline bool is_zero(vec2) RET;
-static inline bool is_zero(vec3) RET;
-static inline bool is_zero(vec4) RET;
+bool is_zero(vec2) RET;
+bool is_zero(vec3) RET;
+bool is_zero(vec4) RET;
 
 #undef RET
 
@@ -718,7 +792,8 @@ namespace gl_VertexShader {
 const int gl_VertexID = 0;
 const int gl_InstanceID = 0;
 const int gl_BaseVertex = 0;
-const int gl_BaseInstance = 0;
+const int gpu_BaseInstance = 0;
+const int gpu_InstanceIndex = 0;
 float4 gl_Position = float4(0);
 double gl_PointSize = 0;
 float gl_ClipDistance[6] = {0};
@@ -773,12 +848,12 @@ const uint gl_LocalInvocationIndex = {};
 #define shared
 
 namespace gl_ComputeShader {
-static inline void barrier() {}
-static inline void memoryBarrier() {}
-static inline void memoryBarrierShared() {}
-static inline void memoryBarrierImage() {}
-static inline void memoryBarrierBuffer() {}
-static inline void groupMemoryBarrier() {}
+void barrier() {}
+void memoryBarrier() {}
+void memoryBarrierShared() {}
+void memoryBarrierImage() {}
+void memoryBarrierBuffer() {}
+void groupMemoryBarrier() {}
 }  // namespace gl_ComputeShader
 
 /** \} */
@@ -809,159 +884,20 @@ static inline void groupMemoryBarrier() {}
 
 /** \} */
 
+/* GLSL main function must return void. C++ need to return int.
+ * Inject real main (C++) inside the GLSL main definition. */
+#define main() \
+  /* Fake main prototype. */ \
+  /* void */ _fake_main(); \
+  /* Real main. */ \
+  int main() \
+  { \
+    _fake_main(); \
+    return 0; \
+  } \
+  /* Fake main definition. */ \
+  void _fake_main()
+
 #define GLSL_CPP_STUBS
 
-/* Include all shader shared files to that custom type definitions are available when create infos
- * macros are included. Include them here so that only including this file is needed. */
-#include "GPU_shader_shared.hh"
-#include "draw_common_shader_shared.hh"
-#include "draw_shader_shared.hh"
-#include "eevee_shader_shared.hh"
-#include "overlay_shader_shared.h"
-#include "select_shader_shared.hh"
-#include "workbench_shader_shared.h"
-
-/* Include all create infos here so that they don't need to be individually included
- * inside shaders. */
-#include "draw_debug_info.hh"
-#include "draw_fullscreen_info.hh"
-#include "draw_hair_refine_info.hh"
-#include "draw_object_infos_info.hh"
-#include "draw_view_info.hh"
-#include "infos/basic_depth_info.hh"
-#include "infos/compositor_alpha_crop_info.hh"
-#include "infos/compositor_bilateral_blur_info.hh"
-#include "infos/compositor_bokeh_blur_info.hh"
-#include "infos/compositor_bokeh_blur_variable_size_info.hh"
-#include "infos/compositor_bokeh_image_info.hh"
-#include "infos/compositor_box_mask_info.hh"
-#include "infos/compositor_compute_preview_info.hh"
-#include "infos/compositor_convert_info.hh"
-#include "infos/compositor_cryptomatte_info.hh"
-#include "infos/compositor_defocus_info.hh"
-#include "infos/compositor_deriche_gaussian_blur_info.hh"
-#include "infos/compositor_despeckle_info.hh"
-#include "infos/compositor_directional_blur_info.hh"
-#include "infos/compositor_displace_info.hh"
-#include "infos/compositor_double_edge_mask_info.hh"
-#include "infos/compositor_edge_filter_info.hh"
-#include "infos/compositor_ellipse_mask_info.hh"
-#include "infos/compositor_filter_info.hh"
-#include "infos/compositor_flip_info.hh"
-#include "infos/compositor_glare_info.hh"
-#include "infos/compositor_id_mask_info.hh"
-#include "infos/compositor_image_crop_info.hh"
-#include "infos/compositor_inpaint_info.hh"
-#include "infos/compositor_jump_flooding_info.hh"
-#include "infos/compositor_keying_info.hh"
-#include "infos/compositor_keying_screen_info.hh"
-#include "infos/compositor_kuwahara_info.hh"
-#include "infos/compositor_map_uv_info.hh"
-#include "infos/compositor_morphological_blur_info.hh"
-#include "infos/compositor_morphological_distance_feather_info.hh"
-#include "infos/compositor_morphological_distance_info.hh"
-#include "infos/compositor_morphological_distance_threshold_info.hh"
-#include "infos/compositor_morphological_step_info.hh"
-#include "infos/compositor_motion_blur_info.hh"
-#include "infos/compositor_movie_distortion_info.hh"
-#include "infos/compositor_normalize_info.hh"
-#include "infos/compositor_parallel_reduction_info.hh"
-#include "infos/compositor_pixelate_info.hh"
-#include "infos/compositor_plane_deform_info.hh"
-#include "infos/compositor_premultiply_alpha_info.hh"
-#include "infos/compositor_projector_lens_distortion_info.hh"
-#include "infos/compositor_read_input_info.hh"
-#include "infos/compositor_realize_on_domain_info.hh"
-#include "infos/compositor_scale_variable_info.hh"
-#include "infos/compositor_screen_lens_distortion_info.hh"
-#include "infos/compositor_smaa_info.hh"
-#include "infos/compositor_split_info.hh"
-#include "infos/compositor_summed_area_table_info.hh"
-#include "infos/compositor_sun_beams_info.hh"
-#include "infos/compositor_symmetric_blur_info.hh"
-#include "infos/compositor_symmetric_blur_variable_size_info.hh"
-#include "infos/compositor_symmetric_separable_blur_info.hh"
-#include "infos/compositor_symmetric_separable_blur_variable_size_info.hh"
-#include "infos/compositor_tone_map_photoreceptor_info.hh"
-#include "infos/compositor_tone_map_simple_info.hh"
-#include "infos/compositor_van_vliet_gaussian_blur_info.hh"
-#include "infos/compositor_write_output_info.hh"
-#include "infos/compositor_z_combine_info.hh"
-#include "infos/eevee_ambient_occlusion_info.hh"
-#include "infos/eevee_deferred_info.hh"
-#include "infos/eevee_depth_of_field_info.hh"
-#include "infos/eevee_film_info.hh"
-#include "infos/eevee_hiz_info.hh"
-#include "infos/eevee_light_culling_info.hh"
-#include "infos/eevee_lightprobe_sphere_info.hh"
-#include "infos/eevee_lightprobe_volume_info.hh"
-#include "infos/eevee_lookdev_info.hh"
-#include "infos/eevee_lut_info.hh"
-#include "infos/eevee_material_info.hh"
-#include "infos/eevee_motion_blur_info.hh"
-#include "infos/eevee_shadow_info.hh"
-#include "infos/eevee_subsurface_info.hh"
-#include "infos/eevee_tracing_info.hh"
-#include "infos/eevee_velocity_info.hh"
-#include "infos/eevee_volume_info.hh"
-#include "infos/engine_image_info.hh"
-#include "infos/gpencil_info.hh"
-#include "infos/gpencil_vfx_info.hh"
-#include "infos/gpu_clip_planes_info.hh"
-#include "infos/gpu_index_load_info.hh"
-#include "infos/gpu_shader_2D_area_borders_info.hh"
-#include "infos/gpu_shader_2D_checker_info.hh"
-#include "infos/gpu_shader_2D_diag_stripes_info.hh"
-#include "infos/gpu_shader_2D_image_desaturate_color_info.hh"
-#include "infos/gpu_shader_2D_image_info.hh"
-#include "infos/gpu_shader_2D_image_overlays_merge_info.hh"
-#include "infos/gpu_shader_2D_image_overlays_stereo_merge_info.hh"
-#include "infos/gpu_shader_2D_image_rect_color_info.hh"
-#include "infos/gpu_shader_2D_image_shuffle_color_info.hh"
-#include "infos/gpu_shader_2D_nodelink_info.hh"
-#include "infos/gpu_shader_2D_point_uniform_size_uniform_color_aa_info.hh"
-#include "infos/gpu_shader_2D_point_uniform_size_uniform_color_outline_aa_info.hh"
-#include "infos/gpu_shader_2D_point_varying_size_varying_color_info.hh"
-#include "infos/gpu_shader_2D_widget_info.hh"
-#include "infos/gpu_shader_3D_depth_only_info.hh"
-#include "infos/gpu_shader_3D_flat_color_info.hh"
-#include "infos/gpu_shader_3D_image_info.hh"
-#include "infos/gpu_shader_3D_point_info.hh"
-#include "infos/gpu_shader_3D_polyline_info.hh"
-#include "infos/gpu_shader_3D_smooth_color_info.hh"
-#include "infos/gpu_shader_3D_uniform_color_info.hh"
-#include "infos/gpu_shader_gpencil_stroke_info.hh"
-#include "infos/gpu_shader_icon_info.hh"
-#include "infos/gpu_shader_index_info.hh"
-#include "infos/gpu_shader_instance_varying_color_varying_size_info.hh"
-#include "infos/gpu_shader_keyframe_shape_info.hh"
-#include "infos/gpu_shader_line_dashed_uniform_color_info.hh"
-#include "infos/gpu_shader_print_info.hh"
-#include "infos/gpu_shader_sequencer_info.hh"
-#include "infos/gpu_shader_simple_lighting_info.hh"
-#include "infos/gpu_shader_text_info.hh"
-#include "infos/gpu_srgb_to_framebuffer_space_info.hh"
-#include "infos/overlay_antialiasing_info.hh"
-#include "infos/overlay_armature_info.hh"
-#include "infos/overlay_background_info.hh"
-#include "infos/overlay_edit_mode_info.hh"
-#include "infos/overlay_extra_info.hh"
-#include "infos/overlay_facing_info.hh"
-#include "infos/overlay_grid_info.hh"
-#include "infos/overlay_outline_info.hh"
-#include "infos/overlay_paint_info.hh"
-#include "infos/overlay_sculpt_curves_info.hh"
-#include "infos/overlay_sculpt_info.hh"
-#include "infos/overlay_viewer_attribute_info.hh"
-#include "infos/overlay_volume_info.hh"
-#include "infos/overlay_wireframe_info.hh"
-#include "infos/select_id_info.hh"
-#include "infos/workbench_composite_info.hh"
-#include "infos/workbench_depth_info.hh"
-#include "infos/workbench_effect_antialiasing_info.hh"
-#include "infos/workbench_effect_dof_info.hh"
-#include "infos/workbench_effect_outline_info.hh"
-#include "infos/workbench_prepass_info.hh"
-#include "infos/workbench_shadow_info.hh"
-#include "infos/workbench_transparent_resolve_info.hh"
-#include "infos/workbench_volume_info.hh"
+#include "GPU_shader_shared_utils.hh"

@@ -78,8 +78,11 @@ float brush_point_influence(const Scene &scene,
                             const float2 &co,
                             const InputSample &sample,
                             float multi_frame_falloff);
-/* Compute the closest distance to a polygon. If the point is inside the polygon, the distance is
- * 0.0f. If the point is outside the polygon, the distance to the closest point is returned. */
+/**
+ * Compute the closest distance to the "surface".
+ * When the point is outside the polygon, compute the closest distance to the polygon points.
+ * When the point is inside the polygon return 0.
+ */
 float closest_distance_to_surface_2d(const float2 pt, const Span<float2> verts);
 /* Influence value for an entire fill. */
 float brush_fill_influence(const Scene &scene,
@@ -87,6 +90,9 @@ float brush_fill_influence(const Scene &scene,
                            Span<float2> fill_positions,
                            const InputSample &sample,
                            float multi_frame_falloff);
+
+/* Based on pinning status, decide whether to use vertex color or material mode for brush. */
+bool brush_using_vertex_color(const GpPaint *gp_paint, const Brush *brush);
 
 /* True if influence of the brush should be inverted. */
 bool is_brush_inverted(const Brush &brush, BrushStrokeMode stroke_mode);
@@ -185,8 +191,8 @@ class GreasePencilStrokeOperationCommon : public GreasePencilStrokeOperation {
 
 /* Operations */
 
-std::unique_ptr<GreasePencilStrokeOperation> new_paint_operation();
-std::unique_ptr<GreasePencilStrokeOperation> new_erase_operation(bool temp_eraser);
+std::unique_ptr<GreasePencilStrokeOperation> new_paint_operation(bool temp_draw = false);
+std::unique_ptr<GreasePencilStrokeOperation> new_erase_operation(bool temp_eraser = false);
 std::unique_ptr<GreasePencilStrokeOperation> new_tint_operation();
 std::unique_ptr<GreasePencilStrokeOperation> new_weight_paint_draw_operation(
     const BrushStrokeMode &brush_mode);

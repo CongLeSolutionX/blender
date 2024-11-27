@@ -43,7 +43,6 @@
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
 #include "BKE_deform.hh"
-#include "BKE_gpencil_curve_legacy.h"
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_main.hh"
@@ -235,28 +234,10 @@ bGPdata *ED_annotation_data_get_active_direct(ID *screen_id, ScrArea *area, Scen
   return (gpd_ptr) ? *(gpd_ptr) : nullptr;
 }
 
-bGPdata *ED_gpencil_data_get_active(const bContext *C)
-{
-  Object *ob = CTX_data_active_object(C);
-  if ((ob == nullptr) || (ob->type != OB_GPENCIL_LEGACY)) {
-    return nullptr;
-  }
-  return static_cast<bGPdata *>(ob->data);
-}
-
 bGPdata *ED_annotation_data_get_active(const bContext *C)
 {
   bGPdata **gpd_ptr = ED_annotation_data_get_pointers(C, nullptr);
   return (gpd_ptr) ? *(gpd_ptr) : nullptr;
-}
-
-/* -------------------------------------------------------- */
-
-bool ED_gpencil_data_owner_is_annotation(PointerRNA *owner_ptr)
-{
-  /* Key Assumption: If the pointer is an object, we're dealing with a GP Object's data.
-   * Otherwise, the GP data-block is being used for annotations (i.e. everywhere else). */
-  return ((owner_ptr) && (owner_ptr->type != &RNA_Object));
 }
 
 /* ******************************************************** */
@@ -300,29 +281,6 @@ bool ED_gpencil_stroke_can_use_direct(const ScrArea *area, const bGPDstroke *gps
     return (area->spacetype != SPACE_VIEW3D);
   }
   /* view aligned - anything goes */
-  return true;
-}
-
-bool ED_gpencil_stroke_can_use(const bContext *C, const bGPDstroke *gps)
-{
-  ScrArea *area = CTX_wm_area(C);
-  return ED_gpencil_stroke_can_use_direct(area, gps);
-}
-
-bool ED_gpencil_stroke_material_editable(Object *ob, const bGPDlayer *gpl, const bGPDstroke *gps)
-{
-  /* check if the color is editable */
-  MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, gps->mat_nr + 1);
-
-  if (gp_style != nullptr) {
-    if (gp_style->flag & GP_MATERIAL_HIDE) {
-      return false;
-    }
-    if (((gpl->flag & GP_LAYER_UNLOCK_COLOR) == 0) && (gp_style->flag & GP_MATERIAL_LOCKED)) {
-      return false;
-    }
-  }
-
   return true;
 }
 

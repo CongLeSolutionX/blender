@@ -113,7 +113,8 @@ using TreeViewOrItem = TreeViewItemContainer;
 
 class AbstractTreeView : public AbstractView, public TreeViewItemContainer {
   /* Shared pointer so the pointer can be kept persistent over redraws. The grip button gets a
-   * pointer to modify the value on resizing, and it uses it to identify the button over redraws.*/
+   * pointer to modify the value on resizing, and it uses it to identify the button over redraws.
+   */
   /* TODO support region zoom. */
   std::shared_ptr<int> custom_height_ = nullptr;
   std::shared_ptr<int> scroll_value_ = nullptr;
@@ -145,6 +146,9 @@ class AbstractTreeView : public AbstractView, public TreeViewItemContainer {
 
  protected:
   virtual void build_tree() = 0;
+
+  std::optional<uiViewState> persistent_state() const override;
+  void persistent_state_apply(const uiViewState &state) override;
 
  private:
   void foreach_view_item(FunctionRef<void(AbstractViewItem &)> iter_fn) const final;
@@ -404,7 +408,8 @@ class TreeViewItemDropTarget : public DropTargetInterface {
 
 class TreeViewBuilder {
  public:
-  static void build_tree_view(AbstractTreeView &tree_view,
+  static void build_tree_view(const bContext &C,
+                              AbstractTreeView &tree_view,
                               uiLayout &layout,
                               std::optional<StringRef> search_string = {},
                               bool add_box = true);

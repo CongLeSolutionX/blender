@@ -81,11 +81,6 @@ struct tGPspoint {
 bGPdata **ED_gpencil_data_get_pointers(const bContext *C, PointerRNA *r_ptr);
 
 /**
- * Get the active Grease Pencil data-block
- */
-bGPdata *ED_gpencil_data_get_active(const bContext *C);
-
-/**
  * Context independent (i.e. each required part is passed in instead).
  *
  * Get pointer to active Grease Pencil data-block,
@@ -120,20 +115,10 @@ bGPdata **ED_annotation_data_get_pointers_direct(ID *screen_id,
 bGPdata *ED_annotation_data_get_active_direct(ID *screen_id, ScrArea *area, Scene *scene);
 
 /**
- * Utility to check whether the r_ptr output of ED_gpencil_data_get_pointers()
- * is for annotation usage.
- */
-bool ED_gpencil_data_owner_is_annotation(PointerRNA *owner_ptr);
-
-/**
  * Check whether given stroke can be edited given the supplied context.
  * TODO: do we need additional flags for screen-space vs data-space?.
  */
 bool ED_gpencil_stroke_can_use_direct(const ScrArea *area, const bGPDstroke *gps);
-/** Check whether given stroke can be edited in the current context */
-bool ED_gpencil_stroke_can_use(const bContext *C, const bGPDstroke *gps);
-/** Check whether given stroke can be edited for the current color */
-bool ED_gpencil_stroke_material_editable(Object *ob, const bGPDlayer *gpl, const bGPDstroke *gps);
 
 /* ----------- Grease Pencil Operators ----------------- */
 

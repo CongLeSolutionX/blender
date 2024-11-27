@@ -42,7 +42,7 @@
 #include "opensubdiv_evaluator_capi.hh"
 #ifdef WITH_OPENSUBDIV
 #  include "opensubdiv_evaluator.hh"
-#  include "opensubdiv_topology_refiner_capi.hh"
+#  include "opensubdiv_topology_refiner.hh"
 #endif
 
 #include "draw_cache_extract.hh"
@@ -65,31 +65,30 @@ extern "C" char datatoc_common_subdiv_vbo_edituv_strech_area_comp_glsl[];
 
 namespace blender::draw {
 
-enum {
-  SHADER_BUFFER_LINES,
-  SHADER_BUFFER_LINES_LOOSE,
-  SHADER_BUFFER_EDGE_FAC,
-  SHADER_BUFFER_LNOR,
-  SHADER_BUFFER_TRIS,
-  SHADER_BUFFER_TRIS_MULTIPLE_MATERIALS,
-  SHADER_BUFFER_NORMALS_ACCUMULATE,
-  SHADER_BUFFER_NORMALS_FINALIZE,
-  SHADER_BUFFER_CUSTOM_NORMALS_FINALIZE,
-  SHADER_PATCH_EVALUATION,
-  SHADER_PATCH_EVALUATION_FVAR,
-  SHADER_PATCH_EVALUATION_FACE_DOTS,
-  SHADER_PATCH_EVALUATION_FACE_DOTS_WITH_NORMALS,
-  SHADER_PATCH_EVALUATION_ORCO,
-  SHADER_COMP_CUSTOM_DATA_INTERP_1D,
-  SHADER_COMP_CUSTOM_DATA_INTERP_2D,
-  SHADER_COMP_CUSTOM_DATA_INTERP_3D,
-  SHADER_COMP_CUSTOM_DATA_INTERP_4D,
-  SHADER_BUFFER_SCULPT_DATA,
-  SHADER_BUFFER_UV_STRETCH_ANGLE,
-  SHADER_BUFFER_UV_STRETCH_AREA,
-
-  NUM_SHADERS,
+enum SubdivShaderType {
+  SHADER_BUFFER_LINES = 0,
+  SHADER_BUFFER_LINES_LOOSE = 1,
+  SHADER_BUFFER_EDGE_FAC = 2,
+  SHADER_BUFFER_LNOR = 3,
+  SHADER_BUFFER_TRIS = 4,
+  SHADER_BUFFER_TRIS_MULTIPLE_MATERIALS = 5,
+  SHADER_BUFFER_NORMALS_ACCUMULATE = 6,
+  SHADER_BUFFER_NORMALS_FINALIZE = 7,
+  SHADER_BUFFER_CUSTOM_NORMALS_FINALIZE = 8,
+  SHADER_PATCH_EVALUATION = 9,
+  SHADER_PATCH_EVALUATION_FVAR = 10,
+  SHADER_PATCH_EVALUATION_FACE_DOTS = 11,
+  SHADER_PATCH_EVALUATION_FACE_DOTS_WITH_NORMALS = 12,
+  SHADER_PATCH_EVALUATION_ORCO = 13,
+  SHADER_COMP_CUSTOM_DATA_INTERP_1D = 14,
+  SHADER_COMP_CUSTOM_DATA_INTERP_2D = 15,
+  SHADER_COMP_CUSTOM_DATA_INTERP_3D = 16,
+  SHADER_COMP_CUSTOM_DATA_INTERP_4D = 17,
+  SHADER_BUFFER_SCULPT_DATA = 18,
+  SHADER_BUFFER_UV_STRETCH_ANGLE = 19,
+  SHADER_BUFFER_UV_STRETCH_AREA = 20,
 };
+constexpr int NUM_SHADERS = 21;
 
 static GPUShader *g_subdiv_shaders[NUM_SHADERS];
 
@@ -97,7 +96,7 @@ static GPUShader *g_subdiv_shaders[NUM_SHADERS];
 static GPUShader
     *g_subdiv_custom_data_shaders[SHADER_CUSTOM_DATA_INTERP_MAX_DIMENSIONS][GPU_COMP_MAX];
 
-static const char *get_shader_code(int shader_type)
+static StringRefNull get_shader_code(SubdivShaderType shader_type)
 {
   switch (shader_type) {
     case SHADER_BUFFER_LINES:
@@ -144,10 +143,11 @@ static const char *get_shader_code(int shader_type)
       return datatoc_common_subdiv_vbo_edituv_strech_area_comp_glsl;
     }
   }
-  return nullptr;
+  BLI_assert_unreachable();
+  return "";
 }
 
-static const char *get_shader_name(int shader_type)
+static StringRefNull get_shader_name(SubdivShaderType shader_type)
 {
   switch (shader_type) {
     case SHADER_BUFFER_LINES: {
@@ -171,6 +171,9 @@ static const char *get_shader_name(int shader_type)
     }
     case SHADER_BUFFER_NORMALS_FINALIZE: {
       return "subdiv normals finalize";
+    }
+    case SHADER_BUFFER_CUSTOM_NORMALS_FINALIZE: {
+      return "subdiv custom normals finalize";
     }
     case SHADER_PATCH_EVALUATION: {
       return "subdiv patch evaluation";
@@ -209,15 +212,16 @@ static const char *get_shader_name(int shader_type)
       return "subdiv uv stretch area";
     }
   }
-  return nullptr;
+  BLI_assert_unreachable();
+  return "";
 }
 
-static GPUShader *get_patch_evaluation_shader(int shader_type)
+static GPUShader *get_patch_evaluation_shader(SubdivShaderType shader_type)
 {
   if (g_subdiv_shaders[shader_type] == nullptr) {
-    const char *compute_code = get_shader_code(shader_type);
+    const StringRefNull compute_code = get_shader_code(shader_type);
 
-    const char *defines = nullptr;
+    std::optional<StringRefNull> defines;
     if (shader_type == SHADER_PATCH_EVALUATION) {
       defines =
           "#define OSD_PATCH_BASIS_GLSL\n"
@@ -253,18 +257,17 @@ static GPUShader *get_patch_evaluation_shader(int shader_type)
     }
 
     /* Merge OpenSubdiv library code with our own library code. */
-    const char *patch_basis_source = openSubdiv_getGLSLPatchBasisSource();
-    const char *subdiv_lib_code = datatoc_common_subdiv_lib_glsl;
-    char *library_code = BLI_string_joinN(patch_basis_source, subdiv_lib_code);
+    const StringRefNull patch_basis_source = openSubdiv_getGLSLPatchBasisSource();
+    const StringRefNull subdiv_lib_code = datatoc_common_subdiv_lib_glsl;
+    std::string library_code = patch_basis_source + subdiv_lib_code;
     g_subdiv_shaders[shader_type] = GPU_shader_create_compute(
         compute_code, library_code, defines, get_shader_name(shader_type));
-    MEM_freeN(library_code);
   }
 
   return g_subdiv_shaders[shader_type];
 }
 
-static GPUShader *get_subdiv_shader(int shader_type)
+static GPUShader *get_subdiv_shader(SubdivShaderType shader_type)
 {
   if (ELEM(shader_type,
            SHADER_PATCH_EVALUATION,
@@ -282,8 +285,8 @@ static GPUShader *get_subdiv_shader(int shader_type)
                    SHADER_COMP_CUSTOM_DATA_INTERP_4D));
 
   if (g_subdiv_shaders[shader_type] == nullptr) {
-    const char *compute_code = get_shader_code(shader_type);
-    const char *defines = nullptr;
+    const StringRefNull compute_code = get_shader_code(shader_type);
+    std::optional<StringRefNull> defines;
 
     if (ELEM(shader_type,
              SHADER_BUFFER_LINES,
@@ -304,7 +307,9 @@ static GPUShader *get_subdiv_shader(int shader_type)
     else if (shader_type == SHADER_BUFFER_EDGE_FAC) {
       /* No separate shader for the AMD driver case as we assume that the GPU will not change
        * during the execution of the program. */
-      defines = GPU_crappy_amd_driver() ? "#define GPU_AMD_DRIVER_BYTE_BUG\n" : nullptr;
+      if (GPU_crappy_amd_driver()) {
+        defines = "#define GPU_AMD_DRIVER_BYTE_BUG\n";
+      }
     }
     else if (shader_type == SHADER_BUFFER_CUSTOM_NORMALS_FINALIZE) {
       defines = "#define CUSTOM_NORMALS\n";
@@ -326,9 +331,9 @@ static GPUShader *get_subdiv_custom_data_shader(int comp_type, int dimensions)
   GPUShader *&shader = g_subdiv_custom_data_shaders[dimensions - 1][comp_type];
 
   if (shader == nullptr) {
-    const char *compute_code = get_shader_code(SHADER_COMP_CUSTOM_DATA_INTERP_1D + dimensions - 1);
-
-    int shader_type = SHADER_COMP_CUSTOM_DATA_INTERP_1D + dimensions - 1;
+    SubdivShaderType shader_type = SubdivShaderType(SHADER_COMP_CUSTOM_DATA_INTERP_1D +
+                                                    dimensions - 1);
+    const StringRefNull compute_code = get_shader_code(shader_type);
 
     std::string defines = "#define SUBDIV_POLYGON_OFFSET\n";
     defines += "#define DIMENSIONS " + std::to_string(dimensions) + "\n";
@@ -347,10 +352,8 @@ static GPUShader *get_subdiv_custom_data_shader(int comp_type, int dimensions)
         break;
     }
 
-    shader = GPU_shader_create_compute(compute_code,
-                                       datatoc_common_subdiv_lib_glsl,
-                                       defines.c_str(),
-                                       get_shader_name(shader_type));
+    shader = GPU_shader_create_compute(
+        compute_code, datatoc_common_subdiv_lib_glsl, defines, get_shader_name(shader_type));
   }
   return shader;
 }
@@ -817,13 +820,13 @@ static void draw_subdiv_cache_update_extra_coarse_face_data(DRWSubdivCache &cach
     }
     GPU_vertbuf_init_with_format_ex(*cache.extra_coarse_face_data, format, GPU_USAGE_DYNAMIC);
     GPU_vertbuf_data_alloc(*cache.extra_coarse_face_data,
-                           mr.extract_type == MR_EXTRACT_BMESH ? cache.bm->totface :
-                                                                 mesh->faces_num);
+                           mr.extract_type == MeshExtractType::BMesh ? cache.bm->totface :
+                                                                       mesh->faces_num);
   }
 
   MutableSpan<uint32_t> flags_data = cache.extra_coarse_face_data->data<uint32_t>();
 
-  if (mr.extract_type == MR_EXTRACT_BMESH) {
+  if (mr.extract_type == MeshExtractType::BMesh) {
     draw_subdiv_cache_extra_coarse_face_data_bm(cache.bm, mr.efa_act, flags_data);
   }
   else if (mr.orig_index_face != nullptr) {
@@ -2133,7 +2136,6 @@ static bool draw_subdiv_create_requested_buffers(Object &ob,
                                                  MeshBufferCache &mbc,
                                                  const bool is_editmode,
                                                  const bool is_paint_mode,
-                                                 const bool edit_mode_active,
                                                  const float4x4 &object_to_world,
                                                  const bool do_final,
                                                  const bool do_uvedit,
@@ -2211,16 +2213,8 @@ static bool draw_subdiv_create_requested_buffers(Object &ob,
     draw_subdiv_cache_ensure_mat_offsets(draw_cache, mesh_eval, batch_cache.mat_len);
   }
 
-  std::unique_ptr<MeshRenderData> mr = mesh_render_data_create(ob,
-                                                               mesh,
-                                                               is_editmode,
-                                                               is_paint_mode,
-                                                               edit_mode_active,
-                                                               object_to_world,
-                                                               do_final,
-                                                               do_uvedit,
-                                                               use_hide,
-                                                               ts);
+  std::unique_ptr<MeshRenderData> mr = mesh_render_data_create(
+      ob, mesh, is_editmode, is_paint_mode, object_to_world, do_final, do_uvedit, use_hide, ts);
   draw_cache.use_hide = use_hide;
 
   /* Used for setting loop normals flags. Mapped extraction is only used during edit mode.
@@ -2289,7 +2283,6 @@ void DRW_create_subdivision(Object &ob,
                             MeshBufferCache &mbc,
                             const bool is_editmode,
                             const bool is_paint_mode,
-                            const bool edit_mode_active,
                             const float4x4 &object_to_world,
                             const bool do_final,
                             const bool do_uvedit,
@@ -2313,7 +2306,6 @@ void DRW_create_subdivision(Object &ob,
                                             mbc,
                                             is_editmode,
                                             is_paint_mode,
-                                            edit_mode_active,
                                             object_to_world,
                                             do_final,
                                             do_uvedit,
