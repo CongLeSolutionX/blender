@@ -86,9 +86,9 @@ static void node_rna(StructRNA *srna)
 }
 
 static void node_label(const bNodeTree * /*ntree*/,
-                     const bNode *node,
-                     char *label,
-                     int label_maxncpy)
+                       const bNode *node,
+                       char *label,
+                       int label_maxncpy)
 {
   const char *name;
   bool enum_label = RNA_enum_name(rna_enum_node_warning_type_items, node->custom1, &name);
