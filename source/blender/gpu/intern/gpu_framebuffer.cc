@@ -98,6 +98,8 @@ void FrameBuffer::attachment_set(GPUAttachmentType type, const GPUAttachment &ne
 
   GPUAttachment &attachment = attachments_[type];
 
+  set_color_attachment_bit(type, new_attachment.tex != nullptr);
+
   if (attachment.tex == new_attachment.tex && attachment.layer == new_attachment.layer &&
       attachment.mip == new_attachment.mip)
   {
@@ -112,11 +114,9 @@ void FrameBuffer::attachment_set(GPUAttachmentType type, const GPUAttachment &ne
   /* Might be null if this is for unbinding. */
   if (new_attachment.tex) {
     reinterpret_cast<Texture *>(new_attachment.tex)->attach_to(this, type);
-    set_color_attachment_bit(type, true);
   }
   else {
     /* GPU_ATTACHMENT_NONE */
-    set_color_attachment_bit(type, false);
   }
 
   attachment = new_attachment;
@@ -148,6 +148,7 @@ void FrameBuffer::subpass_transition(const GPUAttachmentState depth_attachment_s
     GPUAttachmentType type = GPU_FB_COLOR_ATTACHMENT0 + i;
     if (this->attachments_[type].tex) {
       BLI_assert(i < color_attachment_states.size());
+      set_color_attachment_bit(type, color_attachment_states[i] == GPU_ATTACHMENT_WRITE);
     }
     else {
       BLI_assert(i >= color_attachment_states.size() ||
