@@ -54,6 +54,7 @@ Extrema<float> Octree::get_extrema(const vector<Extrema<float>> &values,
 }
 
 bool Octree::should_split(std::shared_ptr<OctreeNode> &node,
+                          const float scale,
                           const bool is_homogeneous_volume) const
 {
   const int3 index_min = object_to_floor_index(node->bbox.min);
@@ -68,7 +69,7 @@ bool Octree::should_split(std::shared_ptr<OctreeNode> &node,
    * regardless of the volume's majorant extinction. */
 
   /* From "Volume Rendering for Pixar's Elemental". */
-  if ((node->sigma.max - node->sigma.min) * len(node->bbox.size()) < 1.442f ||
+  if ((node->sigma.max - node->sigma.min) * len(node->bbox.size()) * scale < 1.442f ||
       node->depth == VOLUME_OCTREE_MAX_DEPTH)
   {
     return false;
@@ -94,9 +95,10 @@ shared_ptr<OctreeInternalNode> Octree::make_internal(shared_ptr<OctreeNode> &nod
 }
 
 void Octree::recursive_build_(shared_ptr<OctreeNode> &octree_node,
+                              const float scale,
                               const bool is_homogeneous_volume = false)
 {
-  if (!should_split(octree_node, is_homogeneous_volume)) {
+  if (!should_split(octree_node, scale, is_homogeneous_volume)) {
     return;
   }
 
@@ -105,7 +107,7 @@ void Octree::recursive_build_(shared_ptr<OctreeNode> &octree_node,
 
   for (auto &child : internal->children_) {
     /* TODO(weizhen): check the performance. */
-    task_pool.push([&] { recursive_build_(child); });
+    task_pool.push([&] { recursive_build_(child, scale); });
   }
 
   octree_node = internal;
@@ -119,6 +121,7 @@ void Octree::flatten(KernelOctreeNode *knodes,
   KernelOctreeNode &knode = knodes[current_index];
   knode.bbox.max = node->bbox.max;
   knode.bbox.min = node->bbox.min;
+  knode.sigma = node->sigma;
 
   if (auto internal_ptr = std::dynamic_pointer_cast<OctreeInternalNode>(node)) {
     knode.first_child = child_index;
@@ -131,7 +134,6 @@ void Octree::flatten(KernelOctreeNode *knodes,
   }
   else {
     knode.first_child = -1;
-    knode.sigma = node->sigma;
   }
 }
 
@@ -302,6 +304,33 @@ void Octree::evaluate_volume_density_(Device *device,
       });
 }
 
+float Octree::volume_scale_(const Object *object) const
+{
+  if (object) {
+    const Geometry *geom = object->get_geometry();
+    if (geom->is_volume()) {
+      const Volume *volume = static_cast<const Volume *>(geom);
+      if (volume->get_object_space()) {
+        if (volume->transform_applied) {
+          const float3 unit = normalize(one_float3());
+          return 1.0f / len(transform_direction(&object->get_tfm(), unit));
+        }
+      }
+      else {
+        if (!volume->transform_applied) {
+          const float3 unit = normalize(one_float3());
+          return len(transform_direction(&object->get_tfm(), unit));
+        }
+      }
+    }
+    else {
+      /* TODO(weizhen): use the maximal scale of all instances. */
+    }
+  }
+
+  return 1.0f;
+}
+
 void Octree::build(Device *device,
                    Progress &progress,
                    const Object *object,
@@ -317,7 +346,9 @@ void Octree::build(Device *device,
 
   progress.set_substatus("Building Octree for volumes");
 
-  recursive_build_(root_, VolumeManager::is_homogeneous_volume(object, shader));
+  const float scale = volume_scale_(object);
+  const bool is_homogeneus = VolumeManager::is_homogeneous_volume(object, shader);
+  recursive_build_(root_, scale, is_homogeneus);
 
   task_pool.wait_work();
 

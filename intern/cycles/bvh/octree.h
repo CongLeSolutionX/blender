@@ -78,16 +78,19 @@ class Octree {
  private:
   bool is_built_;
   std::shared_ptr<OctreeInternalNode> make_internal(std::shared_ptr<OctreeNode> &node);
-  void recursive_build_(std::shared_ptr<OctreeNode> &, const bool);
+  /* Scale the node size so that Octree has the same shape in viewport and final render. */
+  float volume_scale_(const Object *object) const;
+  void recursive_build_(std::shared_ptr<OctreeNode> &, const float, const bool);
   void evaluate_volume_density_(
       Device *, Progress &, const Object *, const Shader *, openvdb::BoolGrid::ConstPtr &);
   Extrema<float> get_extrema(const vector<Extrema<float>> &values,
                              const int3 index_min,
                              const int3 index_max) const;
-  bool should_split(std::shared_ptr<OctreeNode> &, const bool) const;
+  bool should_split(std::shared_ptr<OctreeNode> &, const float, const bool) const;
 
   /* Root node. */
   std::shared_ptr<OctreeNode> root_;
+  /* TODO(weizhen): Remove atomic? */
   std::atomic<int> num_nodes = 1;
 
   TaskPool task_pool;

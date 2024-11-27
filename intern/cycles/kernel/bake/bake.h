@@ -184,7 +184,6 @@ ccl_device void kernel_volume_density_evaluate(KernelGlobals kg,
 
   /* Write output. */
   const float scale = object_volume_density(kg, sd.object);
-  /* TODO(weizhen): don't divide here. */
   output[offset * 2 + 0] = extrema.min / scale;
   output[offset * 2 + 1] = extrema.max / scale;
 #endif
