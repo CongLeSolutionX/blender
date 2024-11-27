@@ -669,7 +669,7 @@ void CurvesGeometry::ensure_nurbs_basis_cache() const
 
         knots.reinitialize(curves::nurbs::knots_num(points.size(), order, is_cyclic));
         if (mode == NURBS_KNOT_MODE_FREE) {
-          curves::nurbs::expand_knots(knots_attr.slice(points), knots);
+          curves::nurbs::expand_knots(order, knots_attr.slice(points), knots);
         }
         else {
           curves::nurbs::calculate_knots(points.size(), mode, order, is_cyclic, knots);

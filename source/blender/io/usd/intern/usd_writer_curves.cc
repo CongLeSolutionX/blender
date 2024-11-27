@@ -304,7 +304,7 @@ static void populate_curve_props_for_nurbs(const bke::CurvesGeometry &curves,
     Array<float> temp_knots(knots_num);
 
     if (mode == NURBS_KNOT_MODE_FREE) {
-      bke::curves::nurbs::expand_knots(knots_attr.slice(points), temp_knots);
+      bke::curves::nurbs::expand_knots(order, knots_attr.slice(points), temp_knots);
     }
     else {
       bke::curves::nurbs::calculate_knots(tot_points, mode, order, is_cyclic, temp_knots);

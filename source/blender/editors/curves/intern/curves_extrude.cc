@@ -202,6 +202,71 @@ static IndexRange shift_end_by(const IndexRange &range, const int n)
   return IndexRange::from_begin_size(range.start(), range.size() + n);
 }
 
+static void extrude_knots(const bke::CurvesGeometry &curves,
+                          const IndexMask &custom_knot_curves,
+                          const OffsetIndices<int> intervals_by_curve,
+                          const OffsetIndices<int> copy_intervals,
+                          const Span<bool> is_first_selected,
+                          const Span<int> new_offsets,
+                          bke::CurvesGeometry &new_curves)
+{
+  const Span<float> knots = curves.knots();
+  const VArray<bool> cyclic = curves.cyclic();
+  const VArray<int8_t> orders = curves.nurbs_orders();
+  const OffsetIndices<int> points_by_curve = curves.points_by_curve();
+
+  Array<float> curve_knots_buff;
+  MutableSpan<float> new_knots = new_curves.knots_for_write();
+  custom_knot_curves.foreach_index_optimized<int64_t>([&](const int64_t curve) {
+    const IndexRange points = points_by_curve[curve];
+    const int order = orders[curve];
+    const int first_index = intervals_by_curve[curve].start();
+    const int first_value = copy_intervals[first_index].start();
+    bool is_selected = is_first_selected[curve];
+
+    Span<float> curve_knots = knots.slice(points);
+    /* TODO: Could be 1.0f, but tesselation must divide separate knot spans instead of whole
+     * curve's definition interval. Otherwise with existing big knot spans 1.0f doesn't get
+     * tesselation steps.*/
+    const float new_step = *std::max_element(curve_knots.begin(), curve_knots.end());
+
+    if (!cyclic[curve]) {
+      curve_knots_buff.reinitialize(points.size());
+      curve_knots_buff.as_mutable_span().copy_from(knots.slice(points));
+
+      curve_knots_buff[0] = new_step;
+      const int ending = points.size() + 1 - order + 1;
+      if (ending < curve_knots_buff.size()) {
+        for (const int i : IndexRange::from_begin_end(ending, curve_knots_buff.size())) {
+          curve_knots_buff[i] = new_step;
+        }
+      }
+      curve_knots = curve_knots_buff.as_span();
+    }
+
+    for (const int i : intervals_by_curve[curve].drop_back(1)) {
+      const IndexRange src = shift_end_by(copy_intervals[i], 1);
+      const IndexRange dst = src.shift(new_offsets[curve] - first_value + i - first_index);
+      new_knots.slice(dst).copy_from(curve_knots.slice(src.shift(-first_value)));
+      if (is_selected) {
+        new_knots[dst.first()] = new_step;
+        new_knots[dst.last()] = new_step;
+      }
+      is_selected = !is_selected;
+    }
+
+    if (!cyclic[curve]) {
+      MutableSpan<float> new_curve_knots = new_knots.slice(
+          IndexRange::from_begin_end(new_offsets[curve], new_offsets[curve + 1]));
+
+      new_curve_knots.first() = 0.0f;
+      for (const int i : IndexRange(order - 2)) {
+        new_curve_knots.last(i) = 0.0f;
+      }
+    }
+  });
+}
+
 static void extrude_curves(Curves &curves_id)
 {
   const bke::AttrDomain selection_domain = bke::AttrDomain(curves_id.selection_domain);
@@ -305,6 +370,22 @@ static void extrude_curves(Curves &curves_id)
     dst_selections[selection_i].finish();
   }
 
+  VArray<int8_t> knots_modes = curves.nurbs_knots_modes();
+  IndexMask custom_knot_curves = IndexMask::from_predicate(
+      curves.curves_range(), GrainSize(512), memory, [&](const int64_t curve) {
+        return knots_modes[curve] == NURBS_KNOT_MODE_FREE;
+      });
+
+  if (custom_knot_curves.size() > 0) {
+    extrude_knots(curves,
+                  custom_knot_curves,
+                  intervals_by_curve,
+                  copy_intervals,
+                  is_first_selected,
+                  new_offsets,
+                  new_curves);
+  }
+
   const OffsetIndices<int> compact_intervals = compress_intervals(intervals_by_curve,
                                                                   copy_interval_offsets);
 
@@ -315,7 +396,7 @@ static void extrude_curves(Curves &curves_id)
            dst_attributes,
            ATTR_DOMAIN_MASK_POINT,
            bke::attribute_filter_from_skip_ref(
-               {".selection", ".selection_handle_left", ".selection_handle_right"})))
+               {".selection", ".selection_handle_left", ".selection_handle_right", "knot"})))
   {
     const CPPType &type = attribute.src.type();
     threading::parallel_for(compact_intervals.index_range(), 512, [&](IndexRange range) {
