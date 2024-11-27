@@ -304,8 +304,10 @@ static bool keymap_item_update_tweak_event(wmKeyMapItem *kmi, void * /*user_data
 static void keymap_update_brushes(
     wmKeyMap *keymap,
     const blender::StringRef asset_prefix,
-    const blender::Map<blender::StringRef, blender::StringRef> &tool_name_lookup,
-    const blender::Map<int, blender::StringRef> &id_lookup)
+    const blender::StringRef tool_property,
+    const blender::Map<blender::StringRef, blender::StringRef> &tool_tool_map,
+    const blender::Map<blender::StringRef, blender::StringRef> &tool_asset_map,
+    const blender::Map<int, blender::StringRef> &id_asset_map)
 {
   LISTBASE_FOREACH (wmKeyMapDiffItem *, kmid, &keymap->diff_items) {
     wmKeyMapItem *kmi = kmid->add_item;
@@ -314,6 +316,7 @@ static void keymap_update_brushes(
     }
 
     std::optional<std::string> asset_id = {};
+    std::optional<std::string> tool_id = {};
     if (STREQ(kmi->idname, "WM_OT_tool_set_by_id")) {
       IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "name");
       if (idprop && (idprop->type == IDP_STRING)) {
@@ -322,26 +325,26 @@ static void keymap_update_brushes(
         {
             continue;
         }
-        printf("FOUND: %s\n", prop_val);
-        if (tool_name_lookup.contains(prop_val)) {
-          asset_id = tool_name_lookup.lookup(prop_val);
+        if (tool_asset_map.contains(prop_val)) {
+          asset_id = tool_asset_map.lookup(prop_val);
+        }
+        else if (tool_tool_map.contains(prop_val)) {
+          tool_id = tool_tool_map.lookup(prop_val);
         }
       }
     }
     else if (STREQ(kmi->idname, "PAINT_OT_brush_select")) {
-      IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "sculpt_tool");
+      IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, tool_property);
       if (idprop && (idprop->type == IDP_INT)) {
         const int prop_val = IDP_Int(idprop);
-        printf("FOUND: %d\n", prop_val);
-        if (id_lookup.contains(prop_val)) {
-          asset_id = id_lookup.lookup(prop_val);
+        if (id_asset_map.contains(prop_val)) {
+          asset_id = id_asset_map.lookup(prop_val);
         }
       }
     }
 
     if (asset_id) {
       const std::string full_path = fmt::format("{}{}", asset_prefix, *asset_id);
-      printf("WROTE: %s\n", full_path.c_str());
 
       WM_keymap_item_properties_reset(kmi, nullptr);
       STRNCPY(kmi->idname, "BRUSH_OT_asset_activate");
@@ -352,16 +355,22 @@ static void keymap_update_brushes(
           kmi->properties,
           blender::bke::idprop::create("relative_asset_identifier", full_path).release());
     }
+    else if (tool_id) {
+      WM_keymap_item_properties_reset(kmi, nullptr);
+      IDP_AddToGroup(
+          kmi->properties,
+          blender::bke::idprop::create("name", *tool_id).release());
+    }
   }
 }
 
 static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
 {
   constexpr blender::StringRef asset_prefix = "brushes/essentials_brushes-mesh_sculpt.blend/Brush/";
+  constexpr blender::StringRef tool_property = "sculpt_tool";
 
-  static auto tool_name_lookup = []() {
+  static auto tool_asset_map = []() {
     blender::Map<blender::StringRef, blender::StringRef> map;
-    map.add_new("builtin_brush.Draw", "Draw");
     map.add_new("builtin_brush.Draw Sharp", "Draw Sharp");
     map.add_new("builtin_brush.Clay", "Clay");
     map.add_new("builtin_brush.Clay Strips", "Clay Strips");
@@ -387,16 +396,23 @@ static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
     map.add_new("builtin_brush.Boundary", "Boundary");
     map.add_new("builtin_brush.Cloth", "Drag Cloth");
     map.add_new("builtin_brush.Simplify", "Density");
-    map.add_new("builtin_brush.Mask", "Mask");
-    map.add_new("builtin_brush.Draw Face Sets", "Face Set Paint");
     map.add_new("builtin_brush.Multires Displacement Eraser", "Erase Multires Displacement");
     map.add_new("builtin_brush.Multires Displacement Smear", "Smear Multires Displacement");
-    map.add_new("builtin_brush.Paint", "Paint Hard");
     map.add_new("builtin_brush.Smear", "Smear");
+
     return map;
   }();
 
-  static auto id_lookup = []() {
+  static auto tool_tool_map = []() {
+    blender::Map<blender::StringRef, blender::StringRef> map;
+    map.add_new("builtin_brush.Draw", "builtin.brush");
+    map.add_new("builtin_brush.Paint", "builtin_brush.paint");
+    map.add_new("builtin_brush.Mask", "builtin_brush.mask");
+    map.add_new("builtin_brush.Draw Face Sets", "builtin_brush.draw_face_sets");
+    return map;
+  }();
+
+  static auto id_asset_map = []() {
     blender::Map<int, blender::StringRef> map;
     map.add_new(SCULPT_BRUSH_TYPE_DRAW, "Draw");
     map.add_new(SCULPT_BRUSH_TYPE_DRAW_SHARP, "Draw Sharp");
@@ -433,7 +449,89 @@ static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
     return map;
   }();
 
-  keymap_update_brushes(keymap, asset_prefix, tool_name_lookup, id_lookup);
+  keymap_update_brushes(keymap, asset_prefix, tool_property, tool_tool_map, tool_asset_map, id_asset_map);
+}
+
+static void keymap_update_mesh_vertex_paint_brushes(wmKeyMap *keymap)
+{
+  constexpr blender::StringRef asset_prefix = "brushes/essentials_brushes-mesh_vertex.blend/Brush/";
+  constexpr blender::StringRef tool_property = "vertex_tool";
+
+  static auto tool_tool_map = []() {
+    blender::Map<blender::StringRef, blender::StringRef> map;
+    map.add_new("builtin_brush.Draw", "builtin.brush");
+    map.add_new("builtin_brush.Blur", "builtin_brush.blur");
+    map.add_new("builtin_brush.Average", "builtin_brush.average");
+    map.add_new("builtin_brush.Smear", "builtin_brush.smear");
+    return map;
+  }();
+
+  static auto id_asset_map = []() {
+    blender::Map<int, blender::StringRef> map;
+    map.add_new(VPAINT_BRUSH_TYPE_DRAW, "Paint Hard");
+    map.add_new(VPAINT_BRUSH_TYPE_BLUR, "Blur");
+    map.add_new(VPAINT_BRUSH_TYPE_AVERAGE, "Average");
+    map.add_new(VPAINT_BRUSH_TYPE_SMEAR, "Smear");
+    return map;
+  }();
+
+  keymap_update_brushes(keymap, asset_prefix, tool_property, tool_tool_map, {}, id_asset_map);
+}
+
+static void keymap_update_mesh_weight_paint_brushes(wmKeyMap *keymap)
+{
+  constexpr blender::StringRef asset_prefix = "brushes/essentials_brushes-mesh_weight.blend/Brush/";
+  constexpr blender::StringRef tool_property = "weight_tool";
+
+  static auto tool_tool_map = []() {
+    blender::Map<blender::StringRef, blender::StringRef> map;
+    map.add_new("builtin_brush.Draw", "builtin.brush");
+    map.add_new("builtin_brush.Blur", "builtin_brush.blur");
+    map.add_new("builtin_brush.Average", "builtin_brush.average");
+    map.add_new("builtin_brush.Smear", "builtin_brush.smear");
+    return map;
+  }();
+
+  static auto asset_id_map = []() {
+    blender::Map<int, blender::StringRef> map;
+    map.add_new(WPAINT_BRUSH_TYPE_DRAW, "Paint");
+    map.add_new(WPAINT_BRUSH_TYPE_BLUR, "Blur");
+    map.add_new(WPAINT_BRUSH_TYPE_AVERAGE, "Average");
+    map.add_new(WPAINT_BRUSH_TYPE_SMEAR, "Smear");
+    return map;
+  }();
+
+  keymap_update_brushes(keymap, asset_prefix, tool_property, tool_tool_map, {}, asset_id_map);
+}
+
+static void keymap_update_mesh_texture_paint_brushes(wmKeyMap *keymap)
+{
+  constexpr blender::StringRef asset_prefix = "brushes/essentials_brushes-mesh_texture.blend/Brush/";
+  constexpr blender::StringRef tool_property = "image_tool";
+
+  static auto tool_tool_map = []() {
+    blender::Map<blender::StringRef, blender::StringRef> map;
+    map.add_new("builtin_brush.Draw", "builtin.brush");
+    map.add_new("builtin_brush.Soften", "builtin_brush.soften");
+    map.add_new("builtin_brush.Smear", "builtin_brush.smear");
+    map.add_new("builtin_brush.Clone", "builtin_brush.clone");
+    map.add_new("builtin_brush.Fill", "builtin_brush.fill");
+    map.add_new("builtin_brush.Mask", "builtin_brush.mask");
+    return map;
+  }();
+
+  static auto id_asset_map = []() {
+    blender::Map<int, blender::StringRef> map;
+    map.add_new(IMAGE_PAINT_BRUSH_TYPE_DRAW, "Paint Hard");
+    map.add_new(IMAGE_PAINT_BRUSH_TYPE_SOFTEN, "Blur");
+    map.add_new(IMAGE_PAINT_BRUSH_TYPE_SMEAR, "Smear");
+    map.add_new(IMAGE_PAINT_BRUSH_TYPE_CLONE, "Clone");
+    map.add_new(IMAGE_PAINT_BRUSH_TYPE_FILL, "Fill");
+    map.add_new(IMAGE_PAINT_BRUSH_TYPE_MASK, "Mask");
+    return map;
+  }();
+
+  keymap_update_brushes(keymap, asset_prefix, tool_property, tool_tool_map, {}, id_asset_map);
 }
 
 void blo_do_versions_userdef(UserDef *userdef)
@@ -1207,9 +1305,17 @@ void blo_do_versions_userdef(UserDef *userdef)
   if (!USER_VERSION_ATLEAST(403, 33)) {
 
     LISTBASE_FOREACH (wmKeyMap *, keymap, &userdef->user_keymaps) {
-      printf("Keymap: %s\n", keymap->idname);
       if (STREQ("Sculpt", keymap->idname)) {
         keymap_update_mesh_sculpt_brushes(keymap);
+      }
+      else if (STREQ("Vertex Paint", keymap->idname)) {
+        keymap_update_mesh_vertex_paint_brushes(keymap);
+      }
+      else if (STREQ("Weight Paint", keymap->idname)) {
+        keymap_update_mesh_weight_paint_brushes(keymap);
+      }
+      else if (STREQ("Image Paint", keymap->idname)) {
+        keymap_update_mesh_texture_paint_brushes(keymap);
       }
     }
   }
