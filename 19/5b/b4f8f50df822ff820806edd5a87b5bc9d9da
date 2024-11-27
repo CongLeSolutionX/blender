@@ -4,3 +4,4 @@ Referenced by issue #119955, Blender 4.1 changed behaviour for renaming objects 
 Referenced by issue #120058, Regression: Undoing a rename while in edit mode crashes Blender
 Referenced by pull request #120099, Fix #120058: Crash on undo rename in edit mode
 Referenced by issue #122310, Can't rename ID to a name if there's another ID of the same name
+Referenced by issue #130990, Naming of objects is not correct
