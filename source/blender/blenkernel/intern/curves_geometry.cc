@@ -50,7 +50,7 @@ constexpr StringRef ATTR_NURBS_ORDER = "nurbs_order";
 constexpr StringRef ATTR_NURBS_WEIGHT = "nurbs_weight";
 constexpr StringRef ATTR_NURBS_KNOTS_MODE = "knots_mode";
 constexpr StringRef ATTR_SURFACE_UV_COORDINATE = "surface_uv_coordinate";
-constexpr StringRef ATTR_KNOT = "knot";
+constexpr StringRef ATTR_KNOT = "nurbs_knot";
 
 /* -------------------------------------------------------------------- */
 /** \name Constructors/Destructor

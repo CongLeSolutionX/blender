@@ -215,14 +215,14 @@ static void extrude_knots(const bke::CurvesGeometry &curves,
   const VArray<int8_t> orders = curves.nurbs_orders();
   const OffsetIndices<int> points_by_curve = curves.points_by_curve();
 
-  Array<float> curve_knots_buff;
   MutableSpan<float> new_knots = new_curves.knots_for_write();
-  custom_knot_curves.foreach_index_optimized<int64_t>([&](const int64_t curve) {
+  custom_knot_curves.foreach_index(GrainSize(64), [&](const int64_t curve) {
     const IndexRange points = points_by_curve[curve];
     const int order = orders[curve];
     const int first_index = intervals_by_curve[curve].start();
     const int first_value = copy_intervals[first_index].start();
     bool is_selected = is_first_selected[curve];
+    Array<float> curve_knots_buff;
 
     Span<float> curve_knots = knots.slice(points);
     /* TODO: Could be 1.0f, but tesselation must divide separate knot spans instead of whole
@@ -396,7 +396,7 @@ static void extrude_curves(Curves &curves_id)
            dst_attributes,
            ATTR_DOMAIN_MASK_POINT,
            bke::attribute_filter_from_skip_ref(
-               {".selection", ".selection_handle_left", ".selection_handle_right", "knot"})))
+               {".selection", ".selection_handle_left", ".selection_handle_right", "nurbs_knot"})))
   {
     const CPPType &type = attribute.src.type();
     threading::parallel_for(compact_intervals.index_range(), 512, [&](IndexRange range) {
