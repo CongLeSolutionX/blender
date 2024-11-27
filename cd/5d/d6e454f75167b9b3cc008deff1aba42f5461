@@ -1,1 +1,2 @@
 Referenced by issue #124953, Blender is ignoring PYTHONPYCACHEPREFIX
+Referenced by commit 8fba37cea7be65c2326ab164a0ad13b36317e1ba, Fix #129657: Broken pipe from a Python script closes Blender
