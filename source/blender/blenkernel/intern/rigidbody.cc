@@ -609,6 +609,10 @@ static void rigidbody_validate_sim_shape(RigidBodyWorld *rbw, Object *ob, bool r
     if (rbo->shared->physics_shape) {
       RB_shape_delete(static_cast<rbCollisionShape *>(rbo->shared->physics_shape));
     }
+    if (rbo->shared->physics_object) {
+      RB_body_set_collision_shape(static_cast<rbRigidBody *>(rbo->shared->physics_object),
+                                  new_shape);
+    }
     rbo->shared->physics_shape = new_shape;
   }
 }
