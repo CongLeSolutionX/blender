@@ -137,12 +137,7 @@ class FrameBuffer {
   {
     if (type >= GPU_FB_COLOR_ATTACHMENT0) {
       int color_index = type - GPU_FB_COLOR_ATTACHMENT0;
-      if (value) {
-        color_attachments_bits_ |= 1u << color_index;
-      }
-      else {
-        color_attachments_bits_ &= ~(1u << color_index);
-      }
+      SET_FLAG_FROM_TEST(color_attachments_bits_, value, 1u << color_index);
     }
   }
 

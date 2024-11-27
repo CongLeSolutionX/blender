@@ -14,8 +14,6 @@
 #include "BLI_math_base.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_global.hh"
-
 #include "GPU_batch.hh"
 #include "GPU_batch_presets.hh"
 #include "GPU_platform.hh"
@@ -372,22 +370,6 @@ blender::IndexRange GPU_batch_draw_expanded_parameter_get(const blender::gpu::Ba
   return blender::IndexRange(out_vertex_first, out_vertex_count);
 }
 
-static void gpu_assert_framebuffer_shader_compatibility()
-{
-  if (!(G.debug & G_DEBUG_GPU)) {
-    return;
-  }
-
-  if (!(Context::get()->state_manager->state.write_mask & eGPUWriteMask::GPU_WRITE_COLOR)) {
-    return;
-  }
-
-  uint16_t fragment_output_bits = Context::get()->shader->fragment_output_bits;
-  uint16_t fb_attachments_bits = Context::get()->active_fb->get_color_attachments_bitset();
-
-  BLI_assert((fb_attachments_bits & ~fragment_output_bits) == 0);
-}
-
 void GPU_batch_draw(Batch *batch)
 {
   BLI_assert(batch != nullptr);
@@ -416,7 +398,7 @@ void GPU_batch_draw_advanced(
 {
   BLI_assert(gpu_batch != nullptr);
   BLI_assert(Context::get()->shader != nullptr);
-  gpu_assert_framebuffer_shader_compatibility();
+  Context::get()->assert_framebuffer_shader_compatibility();
   Batch *batch = static_cast<Batch *>(gpu_batch);
 
   if (vertex_count == 0) {
@@ -448,7 +430,7 @@ void GPU_batch_draw_indirect(Batch *gpu_batch, GPUStorageBuf *indirect_buf, intp
   BLI_assert(gpu_batch != nullptr);
   BLI_assert(Context::get()->shader != nullptr);
   BLI_assert(indirect_buf != nullptr);
-  gpu_assert_framebuffer_shader_compatibility();
+  Context::get()->assert_framebuffer_shader_compatibility();
   Batch *batch = static_cast<Batch *>(gpu_batch);
 
   batch->draw_indirect(indirect_buf, offset);
@@ -460,7 +442,7 @@ void GPU_batch_multi_draw_indirect(
   BLI_assert(gpu_batch != nullptr);
   BLI_assert(Context::get()->shader != nullptr);
   BLI_assert(indirect_buf != nullptr);
-  gpu_assert_framebuffer_shader_compatibility();
+  Context::get()->assert_framebuffer_shader_compatibility();
   Batch *batch = static_cast<Batch *>(gpu_batch);
 
   batch->multi_draw_indirect(indirect_buf, count, offset, stride);

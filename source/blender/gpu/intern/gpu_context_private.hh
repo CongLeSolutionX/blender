@@ -12,6 +12,8 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BKE_global.hh"
+
 #include "GPU_context.hh"
 
 #include "gpu_debug_private.hh"
@@ -104,6 +106,22 @@ class Context {
   virtual void debug_unbind_all_ssbo() = 0;
 
   bool is_active_on_thread();
+
+  void assert_framebuffer_shader_compatibility()
+  {
+    if (!(G.debug & G_DEBUG_GPU)) {
+      return;
+    }
+
+    if (!(state_manager->state.write_mask & eGPUWriteMask::GPU_WRITE_COLOR)) {
+      return;
+    }
+
+    uint16_t fragment_output_bits = shader->fragment_output_bits;
+    uint16_t fb_attachments_bits = active_fb->get_color_attachments_bitset();
+
+    BLI_assert((fb_attachments_bits & ~fragment_output_bits) == 0);
+  }
 };
 
 /* Syntactic sugar. */
