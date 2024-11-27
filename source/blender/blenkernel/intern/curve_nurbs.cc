@@ -52,26 +52,12 @@ int knots_num(const int points_num, const int8_t order, const bool cyclic)
   return points_num + order;
 }
 
-static void compact_knots(const int8_t order,
-                          const Span<float> src_knots,
-                          MutableSpan<float> knots)
+void compact_knots(const int8_t order, const Span<float> src_knots, MutableSpan<float> knots)
 {
   const int8_t degree = order - 1;
   for (const int i : knots.index_range()) {
     knots[i] = src_knots[i + degree] - src_knots[i + degree - 1];
   }
-}
-
-void compact_knots(const int points_num,
-                   const KnotsMode mode,
-                   const int8_t order,
-                   const bool is_cyclic,
-                   MutableSpan<float> dst_knots)
-{
-  BLI_assert(order == math::min(int(order), math::max(points_num, 2)));
-  Array<float> knots(curves::nurbs::knots_num(points_num, order, is_cyclic));
-  calculate_knots(points_num, mode, order, is_cyclic, knots);
-  compact_knots(order, knots, dst_knots);
 }
 
 void expand_knots(const int8_t order, const Span<float> compact_knots, MutableSpan<float> knots)

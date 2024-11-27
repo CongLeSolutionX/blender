@@ -820,8 +820,7 @@ void calculate_knots(
 
 void expand_knots(int8_t order, Span<float> src_knots, MutableSpan<float> knots);
 
-void compact_knots(
-    int points_num, KnotsMode mode, int8_t order, bool is_cyclic, MutableSpan<float> knots);
+void compact_knots(int8_t order, Span<float> src_knots, MutableSpan<float> knots);
 
 /**
  * Based on the knots, the order, and other properties of a NURBS curve, calculate a cache that can
