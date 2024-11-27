@@ -745,7 +745,6 @@ Mesh *USDMeshReader::read_mesh(Mesh *existing_mesh,
    * the topology is consistent, as in the Alembic importer. */
 
   ImportSettings settings;
-  settings.read_flag |= params.read_flags;
 
   if (topology_changed(existing_mesh, params.motion_sample_time)) {
     new_mesh = true;

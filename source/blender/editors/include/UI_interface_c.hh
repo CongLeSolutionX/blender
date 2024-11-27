@@ -2714,6 +2714,11 @@ void uiTemplateCacheFile(uiLayout *layout,
                          PointerRNA *ptr,
                          const char *propname);
 
+void uiTemplateCacheFileProperties(uiLayout *layout,
+                                   const bContext *C,
+                                   PointerRNA *ptr,
+                                   const char *propname);
+
 /**
  * Lookup the CacheFile PointerRNA of the given pointer and return it in the output parameter.
  * Returns true if `ptr` has a RNACacheFile, false otherwise. If false, the output parameter is not

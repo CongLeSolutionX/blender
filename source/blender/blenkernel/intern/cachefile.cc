@@ -71,7 +71,10 @@ static void cache_file_copy_data(Main * /*bmain*/,
 
   cache_file_dst->handle = nullptr;
   cache_file_dst->handle_readers = nullptr;
-  cache_file_dst->properties = IDP_CopyProperty(cache_file_src->properties);
+  cache_file_dst->properties = nullptr;
+  if (cache_file_src->properties) {
+    cache_file_dst->properties = IDP_CopyProperty(cache_file_src->properties);
+  }
   BLI_duplicatelist(&cache_file_dst->object_paths, &cache_file_src->object_paths);
   BLI_duplicatelist(&cache_file_dst->layers, &cache_file_src->layers);
 }

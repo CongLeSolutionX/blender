@@ -7449,6 +7449,41 @@ void uiTemplateCacheFile(uiLayout *layout,
 #endif
 }
 
+void uiTemplateCacheFileProperties(uiLayout *layout,
+                                   const bContext *C,
+                                   PointerRNA *ptr,
+                                   const char *propname)
+{
+  if (!ptr->data) {
+    return;
+  }
+
+  PointerRNA fileptr;
+  if (!uiTemplateCacheFilePointer(ptr, propname, &fileptr)) {
+    return;
+  }
+
+  CacheFile *file = static_cast<CacheFile *>(fileptr.data);
+  if (!file) {
+    return;
+  }
+
+  using namespace blender;
+  if (BLI_path_extension_check_glob(file->filepath, "*.usd;*.usda;*.usdc;*.usdz")) {
+    bke::FileHandlerType *fh = bke::file_handler_find("IO_FH_usd");
+    wmOperatorType *ot = WM_operatortype_find(fh->import_operator, false);
+
+    if (uiLayout *panel = uiLayoutPanel(C, layout, "CacheFile_Properties", true, "Settings")) {
+      /* Assign temporary operator to uiBlock, which takes ownership. */
+      PointerRNA properties = RNA_pointer_create(&file->id, ot->srna, file->properties);
+      wmOperator *op = minimal_operator_create(ot, &properties);
+      UI_block_set_active_operator(uiLayoutGetBlock(panel), op, true);
+
+      template_operator_property_buts_draw_single(
+          C, op, panel, UI_BUT_LABEL_ALIGN_NONE, UI_TEMPLATE_OP_PROPS_HIDE_PRESETS);
+    }
+  }
+}
 /** \} */
 
 /* -------------------------------------------------------------------- */

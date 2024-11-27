@@ -17,6 +17,7 @@
 
 #include "BKE_cachefile.hh"
 #include "BKE_context.hh"
+#include "BKE_idprop.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_report.hh"
@@ -89,6 +90,8 @@ static int cachefile_open_exec(bContext *C, wmOperator *op)
   CacheFile *cache_file = static_cast<CacheFile *>(
       BKE_libblock_alloc(bmain, ID_CF, BLI_path_basename(filepath), 0));
   STRNCPY(cache_file->filepath, filepath);
+  IDPropertyTemplate val{};
+  cache_file->properties = IDP_New(IDP_GROUP, &val, "properties");
   DEG_id_tag_update(&cache_file->id, ID_RECALC_SYNC_TO_EVAL);
 
   /* Will be set when running invoke, not exec directly. */
