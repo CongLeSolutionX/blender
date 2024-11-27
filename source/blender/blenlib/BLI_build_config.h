@@ -338,7 +338,7 @@
 #    define ARCH_CPU_BIG_ENDIAN 1
 #  endif
 #elif defined(__riscv)
-#    define ARCH_CPU_RISCV_FAMILY 1
+#  define ARCH_CPU_RISCV_FAMILY 1
 #  if defined(__LP128__)
 #    define ARCH_CPU_RISCV128 1
 #    define ARCH_CPU_128_BITS 1
