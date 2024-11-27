@@ -374,6 +374,9 @@
 #if !defined(ARCH_CPU_64_BITS)
 #  define ARCH_CPU_64_BITS 0
 #endif
+#if !defined(ARCH_CPU_128_BITS)
+#  define ARCH_CPU_128_BITS 0
+#endif
 
 #if !defined(ARCH_CPU_X86_FAMILY)
 #  define ARCH_CPU_X86_FAMILY 0
@@ -389,6 +392,9 @@
 #endif
 #if !defined(ARCH_CPU_S390_FAMILY)
 #  define ARCH_CPU_S390_FAMILY 0
+#endif
+#if !defined(ARCH_CPU_RISCV_FAMILY)
+#  define ARCH_CPU_RISCV_FAMILY 0
 #endif
 
 #if !defined(ARCH_CPU_ARM64)
@@ -423,6 +429,15 @@
 #endif
 #if !defined(ARCH_CPU_X86_64)
 #  define ARCH_CPU_X86_64 0
+#endif
+#if !defined(ARCH_CPU_RISCV32)
+#  define ARCH_CPU_RISCV32 0
+#endif
+#if !defined(ARCH_CPU_RISCV64)
+#  define ARCH_CPU_RISCV64 0
+#endif
+#if !defined(ARCH_CPU_RISCV128)
+#  define ARCH_CPU_RISCV128 0
 #endif
 
 /** \} */
