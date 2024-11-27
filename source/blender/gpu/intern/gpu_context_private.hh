@@ -132,7 +132,13 @@ class Context {
     uint16_t fragment_output_bits = sh->fragment_output_bits;
     uint16_t fb_attachments_bits = fb->get_color_attachments_bitset();
 
-    BLI_assert((fb_attachments_bits & ~fragment_output_bits) == 0);
+    if ((fb_attachments_bits & ~fragment_output_bits) != 0) {
+      std::string msg;
+      msg = msg + "Shader (" + sh->name_get() + ") does not write to all framebuffer (" +
+            fb->name_get() + ") color attachments";
+      BLI_assert_msg(false, msg.c_str());
+      std::cerr << msg << std::endl;
+    }
   }
 };
 
