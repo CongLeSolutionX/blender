@@ -67,21 +67,21 @@ std::u32string u32_from_utf8(const std::string_view &utf8)
 }
 static int string_find_token(const std::string_view text,
                              const std::string_view token,
-                             const int *start,
-                             const int *next)
+                             const int start,
+                             const int next)
 {
   std::u32string a_u32 = u32_from_utf8(text);
   std::u32string b_u32 = u32_from_utf8(token);
 
-  if (*start < 0 || *start > a_u32.size()) {
+  if (start < 0 || start > a_u32.size()) {
     return -1;
   }
 
-  int pos = *start;
+  int pos = start;
   int count = 0;
   while ((pos = a_u32.find(b_u32, pos)) != std::u32string_view::npos) {
     count++;
-    if (count == *next) {
+    if (count == next) {
       return pos;
     }
     pos += b_u32.size();
@@ -93,14 +93,14 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static auto find_fn = mf::build::SI4_SO<std::string, std::string, int, int, int>(
       "String Find Token",
-      [](const std::string_view text, const std::string_view token, const int &start, const int &next) {
-        if (text.empty() || token.empty()) {
-          return -1;
+      [](const std::string &text, const std::string &token, const int &start, const int &next) {
+        if (text == nullptr || token == nullptr || text.empty() || token.empty()) {
+          return 0;
         }
         else if (next == 0) {
           return 0;
         }
-        return string_find_token(text, token, &start, &next);
+        return string_find_token(text, token, start, next);
       });
 
   builder.set_matching_fn(&find_fn);
