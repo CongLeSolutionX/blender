@@ -673,7 +673,25 @@ static bool region_poll(const bContext *C,
                         const ScrArea *area,
                         const ARegion *region)
 {
-  if (!region->runtime->type || !region->runtime->type->poll) {
+  /* Region type may not be set yet after file read, because area/region initialization is about to
+   * happen still. Only set the type temporarily here, permanently setting it as a side effect
+   * isn't very nice, and might hide further issues. */
+  ARegionType *prev_region_type = region->runtime->type;
+  if (!region->runtime->type) {
+    const SpaceType *space_type = BKE_spacetype_from_id(area->spacetype);
+    if (!space_type) {
+      /* In case of old files with invalid space types. */
+      space_type = BKE_spacetype_from_id(SPACE_VIEW3D);
+    }
+    region->runtime->type = BKE_regiontype_from_id(space_type, region->regiontype);
+    BLI_assert_msg(region->runtime->type != nullptr, "Region type not valid for this space type");
+  }
+  BLI_SCOPED_DEFER([&]() { region->runtime->type = prev_region_type; });
+
+  if (!region->runtime->type) {
+    return false;
+  }
+  if (!region->runtime->type->poll) {
     /* Show region by default. */
     return true;
   }
