@@ -301,13 +301,66 @@ static bool keymap_item_update_tweak_event(wmKeyMapItem *kmi, void * /*user_data
   return false;
 }
 
+static void keymap_update_brushes(
+    wmKeyMap *keymap,
+    const blender::StringRef asset_prefix,
+    const blender::Map<blender::StringRef, blender::StringRef> &tool_name_lookup,
+    const blender::Map<int, blender::StringRef> &id_lookup)
+{
+  LISTBASE_FOREACH (wmKeyMapDiffItem *, kmid, &keymap->diff_items) {
+    wmKeyMapItem *kmi = kmid->add_item;
+    if (!kmi) {
+      continue;
+    }
+
+    std::optional<std::string> asset_id = {};
+    if (STREQ(kmi->idname, "WM_OT_tool_set_by_id")) {
+      IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "name");
+      if (idprop && (idprop->type == IDP_STRING)) {
+        const char *prop_val = IDP_String(idprop);
+        if (!STRPREFIX(prop_val, "builtin_brush."))
+        {
+            continue;
+        }
+        printf("FOUND: %s\n", prop_val);
+        if (tool_name_lookup.contains(prop_val)) {
+          asset_id = tool_name_lookup.lookup(prop_val);
+        }
+      }
+    }
+    else if (STREQ(kmi->idname, "PAINT_OT_brush_select")) {
+      IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "sculpt_tool");
+      if (idprop && (idprop->type == IDP_INT)) {
+        const int prop_val = IDP_Int(idprop);
+        printf("FOUND: %d\n", prop_val);
+        if (id_lookup.contains(prop_val)) {
+          asset_id = id_lookup.lookup(prop_val);
+        }
+      }
+    }
+
+    if (asset_id) {
+      const std::string full_path = fmt::format("{}{}", asset_prefix, *asset_id);
+      printf("WROTE: %s\n", full_path.c_str());
+
+      WM_keymap_item_properties_reset(kmi, nullptr);
+      STRNCPY(kmi->idname, "BRUSH_OT_asset_activate");
+      IDP_AddToGroup(
+          kmi->properties,
+          blender::bke::idprop::create("asset_library_type", ASSET_LIBRARY_ESSENTIALS).release());
+      IDP_AddToGroup(
+          kmi->properties,
+          blender::bke::idprop::create("relative_asset_identifier", full_path).release());
+    }
+  }
+}
+
 static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
 {
-  static std::string asset_prefix = "brushes/essentials_brushes-mesh_sculpt.blend/Brush/";
-  static std::string new_op_name = "BRUSH_OT_asset_activate";
+  constexpr blender::StringRef asset_prefix = "brushes/essentials_brushes-mesh_sculpt.blend/Brush/";
 
   static auto tool_name_lookup = []() {
-    blender::Map<std::string, std::string> map;
+    blender::Map<blender::StringRef, blender::StringRef> map;
     map.add_new("builtin_brush.Draw", "Draw");
     map.add_new("builtin_brush.Draw Sharp", "Draw Sharp");
     map.add_new("builtin_brush.Clay", "Clay");
@@ -344,7 +397,7 @@ static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
   }();
 
   static auto id_lookup = []() {
-    blender::Map<int, std::string> map;
+    blender::Map<int, blender::StringRef> map;
     map.add_new(SCULPT_BRUSH_TYPE_DRAW, "Draw");
     map.add_new(SCULPT_BRUSH_TYPE_DRAW_SHARP, "Draw Sharp");
     map.add_new(SCULPT_BRUSH_TYPE_CLAY, "Clay");
@@ -380,51 +433,7 @@ static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
     return map;
   }();
 
-  LISTBASE_FOREACH (wmKeyMapDiffItem *, kmid, &keymap->diff_items) {
-    wmKeyMapItem *kmi = kmid->add_item;
-    if (!kmi) {
-      continue;
-    }
-
-    std::optional<std::string> asset_id = {};
-    if (STREQ(kmi->idname, "WM_OT_tool_set_by_id")) {
-      IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "name");
-      if (idprop && (idprop->type == IDP_STRING)) {
-        const char *prop_val = IDP_String(idprop);
-        printf("FOUND: %s\n", prop_val);
-        if (tool_name_lookup.contains(prop_val)) {
-          asset_id = tool_name_lookup.lookup(prop_val);
-        }
-      }
-    }
-    else if (STREQ(kmi->idname, "PAINT_OT_brush_select")) {
-      IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "sculpt_tool");
-      if (idprop && (idprop->type == IDP_INT)) {
-        const int prop_val = IDP_Int(idprop);
-        printf("FOUND: %d\n", prop_val);
-        if (id_lookup.contains(prop_val)) {
-          asset_id = id_lookup.lookup(prop_val);
-        }
-      }
-    }
-
-    if (asset_id) {
-      const std::string full_path = fmt::format("{}{}", asset_prefix, *asset_id);
-      printf("WROTE: %s\n", full_path.c_str());
-
-      WM_keymap_item_properties_reset(kmi, nullptr);
-      STRNCPY(kmi->idname, new_op_name.c_str());
-      IDP_AddToGroup(
-          kmi->properties,
-          blender::bke::idprop::create("asset_library_type", ASSET_LIBRARY_ESSENTIALS).release());
-      IDP_AddToGroup(
-          kmi->properties,
-          blender::bke::idprop::create("relative_asset_identifier", full_path).release());
-    }
-    else {
-      /* Handle deletion? */
-    }
-  }
+  keymap_update_brushes(keymap, asset_prefix, tool_name_lookup, id_lookup);
 }
 
 void blo_do_versions_userdef(UserDef *userdef)
