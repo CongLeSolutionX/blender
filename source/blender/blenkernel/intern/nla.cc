@@ -781,7 +781,7 @@ float nlastrip_get_frame(NlaStrip *strip, float cframe, short mode)
   }
 }
 
-float BKE_nla_tweakedit_remap(AnimData *adt, float cframe, short mode)
+float BKE_nla_tweakedit_remap(AnimData *adt, const float cframe, const eNlaTime_ConvertModes mode)
 {
   NlaStrip *strip;
 
@@ -2387,7 +2387,7 @@ bool BKE_nla_tweakmode_enter(const OwnedAnimData owned_adt)
           animrig::ActionSlotAssignmentResult::OK)
       {
         printf("NLA tweak-mode enter - could not assign slot %s\n",
-               strip_slot ? strip_slot->name : "-unassigned-");
+               strip_slot ? strip_slot->identifier : "-unassigned-");
         /* There is one other reason this could fail: when already in NLA tweak mode. But since
          * we're here in the code, the ADT_NLA_EDIT_ON flag is not yet set, and thus that shouldn't
          * be the case.
@@ -2469,7 +2469,7 @@ static void nla_tweakmode_exit_nofollowptr(AnimData *adt)
 
   adt->tmpact = nullptr;
   adt->tmp_slot_handle = animrig::Slot::unassigned;
-  STRNCPY(adt->slot_name, adt->tmp_slot_name);
+  STRNCPY(adt->last_slot_identifier, adt->tmp_last_slot_identifier);
 
   adt->act_track = nullptr;
   adt->actstrip = nullptr;
@@ -2502,7 +2502,7 @@ void BKE_nla_tweakmode_exit(const OwnedAnimData owned_adt)
                                                             nullptr,
                                                             owned_adt.adt.action,
                                                             owned_adt.adt.slot_handle,
-                                                            owned_adt.adt.slot_name);
+                                                            owned_adt.adt.last_slot_identifier);
     BLI_assert_msg(unassign_ok,
                    "When exiting tweak mode, unassigning the tweaked Action should work");
     UNUSED_VARS_NDEBUG(unassign_ok);

@@ -24,8 +24,6 @@
 
 #include "BLT_translation.hh"
 
-#include "ED_sequencer.hh"
-
 #include "transform.hh"
 #include "transform_convert.hh"
 #include "transform_gizmo.hh"
@@ -1100,8 +1098,6 @@ static TransModeInfo *mode_info_get(TransInfo *t, const int mode)
       return &TransMode_curveshrinkfatten;
     case TFM_MASK_SHRINKFATTEN:
       return &TransMode_maskshrinkfatten;
-    case TFM_GPENCIL_SHRINKFATTEN:
-      return &TransMode_gpshrinkfatten;
     case TFM_TRACKBALL:
       return &TransMode_trackball;
     case TFM_PUSHPULL:
@@ -1157,10 +1153,6 @@ void transform_mode_init(TransInfo *t, wmOperator *op, const int mode)
 {
   t->mode = eTfmMode(mode);
   t->mode_info = mode_info_get(t, mode);
-
-  if (t->spacetype == SPACE_SEQ && sequencer_retiming_mode_is_active(t->context)) {
-    t->mode_info = &TransMode_translate;
-  }
 
   if (t->mode_info) {
     t->flag |= eTFlag(t->mode_info->flags);

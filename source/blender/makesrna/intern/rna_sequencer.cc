@@ -203,8 +203,10 @@ static void rna_Sequence_scene_switch_update(Main *bmain, Scene *scene, PointerR
   DEG_relations_tag_update(bmain);
 }
 
-static void rna_Sequence_use_sequence(Main *bmain, Scene *scene, PointerRNA *ptr)
+static void rna_Sequence_use_sequence(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
 {
+  Scene *scene = reinterpret_cast<Scene *>(ptr->owner_id);
+
   /* General update callback. */
   rna_Sequence_invalidate_raw_update(bmain, scene, ptr);
   /* Changing recursion changes set of IDs which needs to be remapped by the copy-on-evaluation.
@@ -381,7 +383,7 @@ static void rna_Sequence_retiming_key_remove(ID *id, SeqRetimingKey *key)
     return;
   }
 
-  SEQ_retiming_remove_key(scene, seq, key);
+  SEQ_retiming_remove_key(seq, key);
 
   SEQ_relations_invalidate_cache_raw(scene, seq);
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);
@@ -3433,6 +3435,12 @@ static void rna_def_text(StructRNA *srna)
   RNA_def_property_range(prop, 0, 1.0);
   RNA_def_property_ui_range(prop, 0.0, 1.0, 1, -1);
   RNA_def_property_float_default(prop, 0.01f);
+  RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
+
+  prop = RNA_def_property(srna, "box_roundness", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "box_roundness");
+  RNA_def_property_ui_text(prop, "Box Roundness", "Box corner radius as a factor of box height");
+  RNA_def_property_range(prop, 0, 1.0);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_invalidate_raw_update");
 
   prop = RNA_def_property(srna, "alignment_x", PROP_ENUM, PROP_NONE);
