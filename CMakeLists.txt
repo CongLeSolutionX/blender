@@ -879,6 +879,8 @@ mark_as_advanced(WITH_SYSTEM_PYTHON_TESTS)
 # We could use `find_package (Python3 COMPONENTS Interpreter)` to set that value automatically.
 # However, on some buildbots this will give the default python version of the current virtual environment,
 # which may differ from the OS default python version.
+# And it would set that global 'python3 exec path' CMake value for all CMake scripts, which could have
+# unexpected and dangerous side effects.
 # So this has to be set explicitely for all builders.
 set(TEST_SYSTEM_PYTHON_EXE "" CACHE PATH "Python executable used to run 'system python' tests")
 mark_as_advanced(TEST_SYSTEM_PYTHON_EXE)
