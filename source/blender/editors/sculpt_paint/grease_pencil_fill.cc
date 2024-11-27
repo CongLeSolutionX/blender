@@ -633,7 +633,7 @@ static bke::CurvesGeometry boundary_to_curves(const Scene &scene,
   for (const int point_i : curves.points_range()) {
     const int pixel_index = boundary.pixels[point_i];
     const int2 pixel_coord = buffer.coord_from_index(pixel_index);
-    const float3 position = placement.project(float2(pixel_coord));
+    const float3 position = placement.project_with_shift(float2(pixel_coord));
     positions[point_i] = position;
 
     /* Calculate radius and opacity for the outline as if it was a user stroke with full pressure.
