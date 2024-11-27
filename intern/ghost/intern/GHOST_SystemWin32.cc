@@ -2432,7 +2432,6 @@ static uint *getClipboardImageFilepath(int *r_width, int *r_height)
 {
   char *filepath = nullptr;
 
-  GHOST_TSuccess result = GHOST_kFailure;
   if (OpenClipboard(nullptr)) {
     if (HANDLE hGlobal = GetClipboardData(CF_HDROP)) {
       if (HDROP hDrop = static_cast<HDROP>(GlobalLock(hGlobal))) {
