@@ -372,7 +372,7 @@ blender::IndexRange GPU_batch_draw_expanded_parameter_get(const blender::gpu::Ba
   return blender::IndexRange(out_vertex_first, out_vertex_count);
 }
 
-void gpu_assert_frambuffer_shader_compatibility()
+static void gpu_assert_framebuffer_shader_compatibility()
 {
   if (!(G.debug & G_DEBUG_GPU)) {
     return;
@@ -423,7 +423,7 @@ void GPU_batch_draw_advanced(
 {
   BLI_assert(gpu_batch != nullptr);
   BLI_assert(Context::get()->shader != nullptr);
-  gpu_assert_frambuffer_shader_compatibility();
+  gpu_assert_framebuffer_shader_compatibility();
   Batch *batch = static_cast<Batch *>(gpu_batch);
 
   if (vertex_count == 0) {
@@ -455,7 +455,7 @@ void GPU_batch_draw_indirect(Batch *gpu_batch, GPUStorageBuf *indirect_buf, intp
   BLI_assert(gpu_batch != nullptr);
   BLI_assert(Context::get()->shader != nullptr);
   BLI_assert(indirect_buf != nullptr);
-  gpu_assert_frambuffer_shader_compatibility();
+  gpu_assert_framebuffer_shader_compatibility();
   Batch *batch = static_cast<Batch *>(gpu_batch);
 
   batch->draw_indirect(indirect_buf, offset);
@@ -467,7 +467,7 @@ void GPU_batch_multi_draw_indirect(
   BLI_assert(gpu_batch != nullptr);
   BLI_assert(Context::get()->shader != nullptr);
   BLI_assert(indirect_buf != nullptr);
-  gpu_assert_frambuffer_shader_compatibility();
+  gpu_assert_framebuffer_shader_compatibility();
   Batch *batch = static_cast<Batch *>(gpu_batch);
 
   batch->multi_draw_indirect(indirect_buf, count, offset, stride);
