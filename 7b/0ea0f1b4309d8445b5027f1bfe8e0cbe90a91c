@@ -4,3 +4,4 @@ Referenced by pull request #124762, Fix #124647: UV editing console error due to
 Referenced by issue #127259, Regression: Sculpt: Hovering with pose brush on dense mesh freezes Blender
 Referenced by issue #129655, Brush settings reset after closing Blender
 Referenced by issue #125787, Textures don't load for brushes when using "Use Relative Paths" option
+Referenced by pull request #131031, Fix #130998: Crash changing Color Palette in Object/Edit/Pose modes
