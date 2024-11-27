@@ -378,7 +378,7 @@ static void outliner_collection_set_flag_recursive(Scene *scene,
   }
   PointerRNA ptr;
   outliner_layer_or_collection_pointer_create(scene, layer_collection, collection, &ptr);
-  if (base_or_object_prop && !RNA_property_editable(&ptr, base_or_object_prop)) {
+  if (layer_or_collection_prop && !RNA_property_editable(&ptr, layer_or_collection_prop)) {
     return;
   }
 
@@ -438,7 +438,7 @@ static bool outliner_collection_is_isolated(Scene *scene,
                                             const LayerCollection *layer_collection_cmp,
                                             const Collection *collection_cmp,
                                             const bool value_cmp,
-                                            const PropertyRNA *layer_or_collection_prop,
+                                            PropertyRNA *layer_or_collection_prop,
                                             LayerCollection *layer_collection,
                                             Collection *collection)
 {
@@ -448,6 +448,12 @@ static bool outliner_collection_is_isolated(Scene *scene,
   Collection *collection_ensure = collection ? collection : layer_collection->collection;
   const Collection *collection_ensure_cmp = collection_cmp ? collection_cmp :
                                                              layer_collection_cmp->collection;
+
+  /* Exclude linked collections, otherwise toggling property won't reset the visibility for
+   * editable collections, see: #130579. */
+  if (layer_or_collection_prop && !RNA_property_editable(&ptr, layer_or_collection_prop)) {
+    return true;
+  }
 
   if (collection_ensure->flag & COLLECTION_IS_MASTER) {
   }
@@ -782,6 +788,12 @@ static void namebutton_fn(bContext *C, void *tsep, char *oldname)
         case TSE_NLA_TRACK: {
           WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_RENAME, nullptr);
           undo_str = "Rename NLA Track";
+          break;
+        }
+        case TSE_MODIFIER: {
+          WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER | NA_RENAME, nullptr);
+          DEG_relations_tag_update(bmain);
+          undo_str = "Rename Modifier";
           break;
         }
         case TSE_EBONE: {

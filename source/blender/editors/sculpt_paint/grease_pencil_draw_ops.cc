@@ -108,7 +108,7 @@ static std::unique_ptr<GreasePencilStrokeOperation> get_stroke_operation(bContex
         return greasepencil::new_erase_operation(false);
       case GPAINT_BRUSH_TYPE_FILL:
         /* Fill tool keymap uses the paint operator as alternative mode. */
-        return greasepencil::new_paint_operation();
+        return greasepencil::new_paint_operation(true);
       case GPAINT_BRUSH_TYPE_TINT:
         return greasepencil::new_tint_operation();
     }
@@ -360,7 +360,8 @@ static int grease_pencil_sculpt_paint_invoke(bContext *C, wmOperator *op, const 
    * the previous key. */
   const bool use_duplicate_previous_key = true;
   for (bke::greasepencil::Layer *layer : grease_pencil.layers_for_write()) {
-    if (ed::greasepencil::ensure_active_keyframe(
+    if (layer->is_editable() &&
+        ed::greasepencil::ensure_active_keyframe(
             *scene, grease_pencil, *layer, use_duplicate_previous_key, inserted_keyframe))
     {
       inserted_keyframe = true;
@@ -712,7 +713,7 @@ static void grease_pencil_fill_extension_cut(const bContext &C,
 
   /* Upper bound for segment count. Arrays are sized for easy index mapping, exact count isn't
    * necessary. Not all entries are added to the BVH tree. */
-  const int max_bvh_lines = bvh_curve_offsets.total_size();
+  const int max_bvh_lines = bvh_curve_offsets.data().last();
   /* Cached view positions for lines. */
   Array<float2> view_starts(max_bvh_lines);
   Array<float2> view_ends(max_bvh_lines);
@@ -1400,6 +1401,19 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
     }
 
     bke::CurvesGeometry &dst_curves = info.target.drawing.strokes_for_write();
+    /* If the `fill_strokes` function creates the "fill_opacity" attribute, make sure that we
+     * initialize this to full opacity on the target geometry. */
+    if (fill_curves.attributes().contains("fill_opacity") &&
+        !dst_curves.attributes().contains("fill_opacity"))
+    {
+      bke::SpanAttributeWriter<float> fill_opacities =
+          dst_curves.attributes_for_write().lookup_or_add_for_write_span<float>(
+              "fill_opacity",
+              bke::AttrDomain::Curve,
+              bke::AttributeInitVArray(VArray<float>::ForSingle(1.0f, dst_curves.curves_num())));
+      fill_opacities.finish();
+    }
+
     Curves *dst_curves_id = curves_new_nomain(dst_curves);
     Curves *fill_curves_id = curves_new_nomain(fill_curves);
     const Array<bke::GeometrySet> geometry_sets = {
@@ -1428,7 +1442,8 @@ static bool grease_pencil_apply_fill(bContext &C, wmOperator &op, const wmEvent 
   WM_cursor_modal_restore(&win);
 
   /* Save extend value for next operation. */
-  brush.gpencil_settings->fill_extend_fac = op_data.extension_length;
+  brush.gpencil_settings->fill_extend_fac = op_data.extension_length /
+                                            bke::greasepencil::LEGACY_RADIUS_CONVERSION_FACTOR;
   BKE_brush_tag_unsaved_changes(&brush);
 
   return true;

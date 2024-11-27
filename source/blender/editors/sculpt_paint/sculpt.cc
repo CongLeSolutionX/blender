@@ -49,7 +49,7 @@
 #include "BKE_context.hh"
 #include "BKE_customdata.hh"
 #include "BKE_global.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_key.hh"
 #include "BKE_layer.hh"
 #include "BKE_mesh.hh"
@@ -5024,6 +5024,20 @@ void flush_update_step(bContext *C, UpdateType update_type)
 
   if (update_type == UpdateType::Position && !ss.shapekey_active) {
     if (pbvh.type() == bke::pbvh::Type::Mesh) {
+      /* Various operations inside sculpt mode can cause either the MeshRuntimeData or the entire
+       * Mesh to be changed (e.g. Undoing the very first operation after opening a file, performing
+       * remesh, etc).
+       *
+       * This is an unideal fix for the core issue here, but to mitigate the drastic performance
+       * falloff, we refreeze the cache before we do any operation that would tag this runtime
+       * cache as dirty.
+       *
+       * See #130636.
+       */
+      if (!mesh->runtime->corner_tris_cache.frozen) {
+        mesh->runtime->corner_tris_cache.freeze();
+      }
+
       /* Updating mesh positions without marking caches dirty is generally not good, but since
        * sculpt mode has special requirements and is expected to have sole ownership of the mesh it
        * modifies, it's generally okay. */

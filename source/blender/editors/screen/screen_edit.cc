@@ -21,7 +21,7 @@
 #include "BKE_context.hh"
 #include "BKE_global.hh"
 #include "BKE_icons.h"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -553,6 +553,11 @@ static bool screen_area_join_ex(
     /* Close both if trimming `sa1`. */
     screen_area_close(C, screen, side1);
     screen_area_close(C, screen, side2);
+  }
+  else {
+    /* Force full rebuild. #130732 */
+    ED_area_tag_redraw(side1);
+    ED_area_tag_redraw(side2);
   }
 
   BKE_icon_changed(screen->id.icon_id);
