@@ -17,7 +17,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Int>("Next Find").min(0).default_value(1);
   b.add_output<decl::Int>("Token Position");
 }
-std::u32string u32_from_utf8(const std::string_view &utf8)
+std::u32string u32_from_utf8(const StringRef &utf8)
 {
   std::u32string u32;
   u32.reserve(utf8.size());
@@ -65,8 +65,8 @@ std::u32string u32_from_utf8(const std::string_view &utf8)
   }
   return u32;
 }
-static int string_find_token(const std::string_view text,
-                             const std::string_view token,
+static int string_find_token(const StringRef text,
+                             const StringRef token,
                              const int start,
                              const int next)
 {
