@@ -296,9 +296,9 @@ static std::optional<std::string> rna_ActionSlot_path(const PointerRNA *ptr)
 {
   animrig::Slot &slot = rna_data_slot(ptr);
 
-  char name_esc[sizeof(slot.name) * 2];
-  BLI_str_escape(name_esc, slot.name, sizeof(name_esc));
-  return fmt::format("slots[\"{}\"]", name_esc);
+  char identifier_esc[sizeof(slot.identifier) * 2];
+  BLI_str_escape(identifier_esc, slot.identifier, sizeof(identifier_esc));
+  return fmt::format("slots[\"{}\"]", identifier_esc);
 }
 
 int rna_ActionSlot_id_root_icon_get(PointerRNA *ptr)
@@ -311,13 +311,13 @@ int rna_ActionSlot_id_root_icon_get(PointerRNA *ptr)
 void rna_ActionSlot_name_display_get(PointerRNA *ptr, char *value)
 {
   animrig::Slot &slot = rna_data_slot(ptr);
-  slot.name_without_prefix().unsafe_copy(value);
+  slot.identifier_without_prefix().unsafe_copy(value);
 }
 
 int rna_ActionSlot_name_display_length(PointerRNA *ptr)
 {
   animrig::Slot &slot = rna_data_slot(ptr);
-  return slot.name_without_prefix().size();
+  return slot.identifier_without_prefix().size();
 }
 
 static void rna_ActionSlot_name_display_set(PointerRNA *ptr, const char *name)
@@ -332,42 +332,43 @@ static void rna_ActionSlot_name_display_set(PointerRNA *ptr, const char *name)
   }
 
   /* Construct the new internal name, from the slot's type and the given name. */
-  const std::string internal_name = slot.name_prefix_for_idtype() + name_ref;
-  action.slot_name_define(slot, internal_name);
+  const std::string internal_name = slot.identifier_prefix_for_idtype() + name_ref;
+  action.slot_identifier_define(slot, internal_name);
 }
 
-static void rna_ActionSlot_name_set(PointerRNA *ptr, const char *name)
+static void rna_ActionSlot_identifier_set(PointerRNA *ptr, const char *identifier)
 {
   animrig::Action &action = rna_action(ptr);
   animrig::Slot &slot = rna_data_slot(ptr);
-  const StringRef name_ref(name);
+  const StringRef identifier_ref(identifier);
 
-  if (name_ref.size() < animrig::Slot::name_length_min) {
-    WM_report(RPT_ERROR, "Action slot names should be at least three characters");
+  if (identifier_ref.size() < animrig::Slot::identifier_length_min) {
+    WM_report(RPT_ERROR, "Action slot identifiers should be at least three characters");
     return;
   }
 
   if (slot.has_idtype()) {
-    /* Check if the new name is going to be compatible with the already-established ID type. */
-    const std::string expect_prefix = slot.name_prefix_for_idtype();
+    /* Check if the new identifier is going to be compatible with the already-established ID type.
+     */
+    const std::string expect_prefix = slot.identifier_prefix_for_idtype();
 
-    if (!name_ref.startswith(expect_prefix)) {
-      const std::string new_prefix = name_ref.substr(0, 2);
+    if (!identifier_ref.startswith(expect_prefix)) {
+      const std::string new_prefix = identifier_ref.substr(0, 2);
       WM_reportf(RPT_WARNING,
-                 "Action slot renamed to unexpected prefix \"%s\" (expected \"%s\").\n",
+                 "Action slot identifier set with unexpected prefix \"%s\" (expected \"%s\").\n",
                  new_prefix.c_str(),
                  expect_prefix.c_str());
     }
   }
 
-  action.slot_name_define(slot, name);
+  action.slot_identifier_define(slot, identifier);
 }
 
-static void rna_ActionSlot_name_update(Main *bmain, Scene *, PointerRNA *ptr)
+static void rna_ActionSlot_identifier_update(Main *bmain, Scene *, PointerRNA *ptr)
 {
   animrig::Action &action = rna_action(ptr);
   animrig::Slot &slot = rna_data_slot(ptr);
-  action.slot_name_propagate(*bmain, slot);
+  action.slot_identifier_propagate(*bmain, slot);
 }
 
 #  ifndef NDEBUG
@@ -378,7 +379,7 @@ static void rna_ActionSlot_debug_log_users(const ID *action_id, ActionSlot *dna_
   Slot &slot = dna_slot->wrap();
 
   printf("\033[38;5;214mAction Slot users of '%s' on Action '%s':\033[0m\n",
-         slot.name,
+         slot.identifier,
          action.id.name + 2);
   if (bmain->is_action_slot_to_id_map_dirty) {
     printf("  User map is \033[93mdirty\033[0m, this will trigger a recompute.\n");
@@ -1415,6 +1416,39 @@ bool rna_Action_actedit_assign_poll(PointerRNA *ptr, PointerRNA value)
   return false;
 }
 
+/** Iterate the FCurves of the given bAnimContext and validate the RNA path. Sets the flag
+ * FCURVE_DISABLED if the path can't be resolved. */
+static void reevaluate_fcurve_errors(bAnimContext *ac)
+{
+  /* Need to take off the flag before filtering, else the filter code would skip the FCurves, which
+   * have not yet been validated. */
+  const bool filtering_enabled = ac->ads->filterflag & ADS_FILTER_ONLY_ERRORS;
+  if (filtering_enabled) {
+    ac->ads->filterflag &= ~ADS_FILTER_ONLY_ERRORS;
+  }
+  ListBase anim_data = {nullptr, nullptr};
+  const eAnimFilter_Flags filter = ANIMFILTER_DATA_VISIBLE | ANIMFILTER_FCURVESONLY;
+  ANIM_animdata_filter(ac, &anim_data, filter, ac->data, eAnimCont_Types(ac->datatype));
+
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+    FCurve *fcu = (FCurve *)ale->key_data;
+    PointerRNA ptr;
+    PropertyRNA *prop;
+    PointerRNA id_ptr = RNA_id_pointer_create(ale->id);
+    if (RNA_path_resolve_property(&id_ptr, fcu->rna_path, &ptr, &prop)) {
+      fcu->flag &= ~FCURVE_DISABLED;
+    }
+    else {
+      fcu->flag |= FCURVE_DISABLED;
+    }
+  }
+
+  ANIM_animdata_freelist(&anim_data);
+  if (filtering_enabled) {
+    ac->ads->filterflag |= ADS_FILTER_ONLY_ERRORS;
+  }
+}
+
 /* All FCurves need to be validated when the "show_only_errors" button is enabled. */
 static void rna_Action_show_errors_update(bContext *C, PointerRNA * /*ptr*/)
 {
@@ -1429,7 +1463,7 @@ static void rna_Action_show_errors_update(bContext *C, PointerRNA * /*ptr*/)
     return;
   }
 
-  blender::animrig::reevaluate_fcurve_errors(&ac);
+  reevaluate_fcurve_errors(&ac);
 }
 
 static std::optional<std::string> rna_DopeSheet_path(const PointerRNA *ptr)
@@ -1943,14 +1977,14 @@ static void rna_def_action_slot(BlenderRNA *brna)
 
   RNA_define_lib_overridable(false);
 
-  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  prop = RNA_def_property(srna, "identifier", PROP_STRING, PROP_NONE);
   RNA_def_struct_name_property(srna, prop);
-  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ActionSlot_name_set");
-  RNA_def_property_string_maxlength(prop, sizeof(ActionSlot::name) - 2);
-  RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_ActionSlot_name_update");
+  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ActionSlot_identifier_set");
+  RNA_def_property_string_maxlength(prop, sizeof(ActionSlot::identifier) - 2);
+  RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_ActionSlot_identifier_update");
   RNA_def_property_ui_text(
       prop,
-      "Slot Name",
+      "Slot Identifier",
       "Used when connecting an Action to a data-block, to find the correct slot handle. This is "
       "the display name, prefixed by two characters determined by the slot's ID type");
 
@@ -1973,8 +2007,8 @@ static void rna_def_action_slot(BlenderRNA *brna)
                                 "rna_ActionSlot_name_display_get",
                                 "rna_ActionSlot_name_display_length",
                                 "rna_ActionSlot_name_display_set");
-  RNA_def_property_string_maxlength(prop, sizeof(ActionSlot::name) - 2);
-  RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_ActionSlot_name_update");
+  RNA_def_property_string_maxlength(prop, sizeof(ActionSlot::identifier) - 2);
+  RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_ActionSlot_identifier_update");
   RNA_def_property_ui_text(
       prop,
       "Slot Display Name",
@@ -2089,7 +2123,7 @@ static void rna_def_action_layer(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, rna_enum_layer_mix_mode_items);
   RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_Action_tag_animupdate");
 
-  /* Collection properties .*/
+  /* Collection properties. */
   prop = RNA_def_property(srna, "strips", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_struct_type(prop, "ActionStrip");
   RNA_def_property_collection_funcs(prop,

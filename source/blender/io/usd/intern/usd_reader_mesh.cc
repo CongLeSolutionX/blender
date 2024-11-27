@@ -159,17 +159,6 @@ static void assign_materials(Main *bmain,
 
 namespace blender::io::usd {
 
-USDMeshReader::USDMeshReader(const pxr::UsdPrim &prim,
-                             const USDImportParams &import_params,
-                             const ImportSettings &settings)
-    : USDGeomReader(prim, import_params, settings),
-      mesh_prim_(prim),
-      is_left_handed_(false),
-      is_time_varying_(false),
-      is_initial_load_(false)
-{
-}
-
 void USDMeshReader::create_object(Main *bmain, const double /*motionSampleTime*/)
 {
   Mesh *mesh = BKE_mesh_add(bmain, name_.c_str());
@@ -223,11 +212,6 @@ void USDMeshReader::read_object_data(Main *bmain, const double motionSampleTime)
   }
 
   USDXformReader::read_object_data(bmain, motionSampleTime);
-}
-
-bool USDMeshReader::valid() const
-{
-  return bool(mesh_prim_);
 }
 
 bool USDMeshReader::topology_changed(const Mesh *existing_mesh, const double motionSampleTime)
@@ -426,8 +410,7 @@ void USDMeshReader::process_normals_vertex_varying(Mesh *mesh)
   }
 
   BLI_STATIC_ASSERT(sizeof(normals_[0]) == sizeof(float3), "Expected float3 normals size");
-  bke::mesh_vert_normals_assign(
-      *mesh, Span(reinterpret_cast<const float3 *>(normals_.data()), int64_t(normals_.size())));
+  BKE_mesh_set_custom_normals_from_verts(mesh, reinterpret_cast<float(*)[3]>(normals_.data()));
 }
 
 void USDMeshReader::process_normals_face_varying(Mesh *mesh) const
@@ -538,7 +521,7 @@ void USDMeshReader::read_custom_data(const ImportSettings *settings,
                                      const double motionSampleTime,
                                      const bool new_mesh)
 {
-  if (!(mesh && mesh_prim_ && mesh->corners_num > 0)) {
+  if (!(mesh && mesh->corners_num > 0)) {
     return;
   }
 
@@ -760,10 +743,6 @@ Mesh *USDMeshReader::read_mesh(Mesh *existing_mesh,
                                const USDMeshReadParams params,
                                const char ** /*r_err_str*/)
 {
-  if (!mesh_prim_) {
-    return existing_mesh;
-  }
-
   mesh_prim_.GetOrientationAttr().Get(&orientation_);
   if (orientation_ == pxr::UsdGeomTokens->leftHanded) {
     is_left_handed_ = true;
@@ -776,9 +755,6 @@ Mesh *USDMeshReader::read_mesh(Mesh *existing_mesh,
    * the topology is consistent, as in the Alembic importer. */
 
   ImportSettings settings;
-  if (settings_) {
-    settings.validate_meshes = settings_->validate_meshes;
-  }
   settings.read_flag |= params.read_flags;
 
   if (topology_changed(existing_mesh, params.motion_sample_time)) {
@@ -805,7 +781,7 @@ Mesh *USDMeshReader::read_mesh(Mesh *existing_mesh,
     }
   }
 
-  if (settings.validate_meshes) {
+  if (import_params_.validate_meshes) {
     if (BKE_mesh_validate(active_mesh, false, false)) {
       BKE_reportf(reports(), RPT_INFO, "Fixed mesh for prim: %s", mesh_prim_.GetPath().GetText());
     }

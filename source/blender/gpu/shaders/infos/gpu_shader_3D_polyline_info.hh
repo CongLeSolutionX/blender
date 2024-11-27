@@ -6,6 +6,16 @@
  * \ingroup gpu
  */
 
+#ifdef GPU_SHADER
+#  pragma once
+#  include "gpu_glsl_cpp_stubs.hh"
+
+#  include "GPU_shader_shared.hh"
+#  include "gpu_index_load_info.hh"
+#  include "gpu_srgb_to_framebuffer_space_info.hh"
+#  define SMOOTH_WIDTH 1.0
+#endif
+
 #include "gpu_interface_info.hh"
 #include "gpu_shader_create_info.hh"
 
@@ -31,7 +41,7 @@ FRAGMENT_OUT(0, VEC4, fragColor)
 VERTEX_SOURCE("gpu_shader_3D_polyline_vert.glsl")
 FRAGMENT_SOURCE("gpu_shader_3D_polyline_frag.glsl")
 ADDITIONAL_INFO(gpu_srgb_to_framebuffer_space)
-ADDITIONAL_INFO(gpu_index_load)
+ADDITIONAL_INFO(gpu_index_buffer_load)
 GPU_SHADER_CREATE_END()
 
 GPU_SHADER_CREATE_INFO(gpu_shader_3D_polyline_uniform_color)

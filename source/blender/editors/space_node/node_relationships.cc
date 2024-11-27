@@ -18,6 +18,7 @@
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.hh"
+#include "BKE_screen.hh"
 
 #include "ED_node.hh" /* own include */
 #include "ED_render.hh"
@@ -981,14 +982,14 @@ static void draw_draglink_tooltip_activate(const ARegion &region, bNodeLinkDrag 
 {
   if (nldrag.draw_handle == nullptr) {
     nldrag.draw_handle = ED_region_draw_cb_activate(
-        region.type, draw_draglink_tooltip, &nldrag, REGION_DRAW_POST_PIXEL);
+        region.runtime->type, draw_draglink_tooltip, &nldrag, REGION_DRAW_POST_PIXEL);
   }
 }
 
 static void draw_draglink_tooltip_deactivate(const ARegion &region, bNodeLinkDrag &nldrag)
 {
   if (nldrag.draw_handle) {
-    ED_region_draw_cb_exit(region.type, nldrag.draw_handle);
+    ED_region_draw_cb_exit(region.runtime->type, nldrag.draw_handle);
     nldrag.draw_handle = nullptr;
   }
 }
@@ -2518,7 +2519,6 @@ static int get_main_socket_priority(const bNodeSocket *socket)
   return -1;
 }
 
-/** Get the "main" socket based on the node declaration or an heuristic. */
 bNodeSocket *get_main_socket(bNodeTree &ntree, bNode &node, eNodeSocketInOut in_out)
 {
   ListBase *sockets = (in_out == SOCK_IN) ? &node.inputs : &node.outputs;
@@ -2554,19 +2554,6 @@ bNodeSocket *get_main_socket(bNodeTree &ntree, bNode &node, eNodeSocketInOut in_
   for (int priority = maxpriority; priority >= 0; priority--) {
     LISTBASE_FOREACH (bNodeSocket *, sock, sockets) {
       if (!!sock->is_visible() && priority == get_main_socket_priority(sock)) {
-        return sock;
-      }
-    }
-  }
-
-  /* No visible sockets, unhide first of highest priority. */
-  for (int priority = maxpriority; priority >= 0; priority--) {
-    LISTBASE_FOREACH (bNodeSocket *, sock, sockets) {
-      if (sock->flag & SOCK_UNAVAIL) {
-        continue;
-      }
-      if (priority == get_main_socket_priority(sock)) {
-        sock->flag &= ~SOCK_HIDDEN;
         return sock;
       }
     }

@@ -298,26 +298,6 @@ static bool need_extra_redraw_after_scrubbing_ends(bContext *C)
   if (scene->eevee.taa_samples != 1) {
     return true;
   }
-  wmWindowManager *wm = CTX_wm_manager(C);
-  Object *object = CTX_data_active_object(C);
-  if (object && object->type == OB_GPENCIL_LEGACY) {
-    LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-      bScreen *screen = WM_window_get_active_screen(win);
-      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
-        SpaceLink *sl = (SpaceLink *)area->spacedata.first;
-        if (sl->spacetype == SPACE_VIEW3D) {
-          View3D *v3d = (View3D *)sl;
-          if ((v3d->flag2 & V3D_HIDE_OVERLAYS) == 0) {
-            if (v3d->gp_flag & V3D_GP_SHOW_ONION_SKIN) {
-              /* Grease pencil onion skin is not drawn during scrubbing. Redraw is necessary after
-               * scrubbing ends to show onion skin again. */
-              return true;
-            }
-          }
-        }
-      }
-    }
-  }
   return false;
 }
 
@@ -679,6 +659,56 @@ static void ANIM_OT_previewrange_clear(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Debug operator: channel list
+ * \{ */
+
+#ifndef NDEBUG
+static int debug_channel_list_exec(bContext *C, wmOperator * /*op*/)
+{
+  bAnimContext ac;
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  ListBase anim_data = {nullptr, nullptr};
+  /* Same filter flags as in action_channel_region_draw() in
+   * `source/blender/editors/space_action/space_action.cc`. */
+  const eAnimFilter_Flags filter = ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE |
+                                   ANIMFILTER_LIST_CHANNELS;
+  ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, eAnimCont_Types(ac.datatype));
+
+  printf("==============================================\n");
+  printf("Animation Channel List:\n");
+  printf("----------------------------------------------\n");
+
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+    ANIM_channel_debug_print_info(ale, 1);
+  }
+
+  printf("==============================================\n");
+
+  ANIM_animdata_freelist(&anim_data);
+  return OPERATOR_FINISHED;
+}
+
+static void ANIM_OT_debug_channel_list(wmOperatorType *ot)
+{
+  ot->name = "Debug Channel List";
+  ot->idname = "ANIM_OT_debug_channel_list";
+  ot->description =
+      "Log the channel list info in the terminal. This operator is only available in debug builds "
+      "of Blender";
+
+  ot->exec = debug_channel_list_exec;
+  ot->poll = ED_operator_animview_active;
+
+  ot->flag = OPTYPE_REGISTER;
+}
+#endif /* !NDEBUG */
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Frame Scene/Preview Range Operator
  * \{ */
 
@@ -742,7 +772,7 @@ static int convert_action_exec(bContext *C, wmOperator * /*op*/)
 
   BLI_assert(layered_action->slots().size() == 1);
   animrig::Slot *slot = layered_action->slot(0);
-  layered_action->slot_name_set(*bmain, *slot, object->id.name);
+  layered_action->slot_identifier_set(*bmain, *slot, object->id.name);
 
   const animrig::ActionSlotAssignmentResult result = animrig::assign_action_slot(slot, object->id);
   BLI_assert(result == animrig::ActionSlotAssignmentResult::OK);
@@ -893,6 +923,10 @@ void ED_operatortypes_anim()
   WM_operatortype_append(ANIM_OT_previewrange_clear);
 
   WM_operatortype_append(ANIM_OT_scene_range_frame);
+
+#ifndef NDEBUG
+  WM_operatortype_append(ANIM_OT_debug_channel_list);
+#endif
 
   /* Entire UI --------------------------------------- */
   WM_operatortype_append(ANIM_OT_keyframe_insert);

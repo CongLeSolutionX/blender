@@ -1094,25 +1094,25 @@ static void drw_shgroup_bone_custom_empty(const Armatures::DrawContext *ctx,
     gpu::Batch *geom = nullptr;
     switch (custom->empty_drawtype) {
       case OB_PLAINAXES:
-        geom = ctx->shapes->plain_axes.get();
+        geom = ctx->res->shapes.plain_axes.get();
         break;
       case OB_SINGLE_ARROW:
-        geom = ctx->shapes->single_arrow.get();
+        geom = ctx->res->shapes.single_arrow.get();
         break;
       case OB_CUBE:
-        geom = ctx->shapes->cube.get();
+        geom = ctx->res->shapes.cube.get();
         break;
       case OB_CIRCLE:
-        geom = ctx->shapes->circle.get();
+        geom = ctx->res->shapes.circle.get();
         break;
       case OB_EMPTY_SPHERE:
-        geom = ctx->shapes->empty_sphere.get();
+        geom = ctx->res->shapes.empty_sphere.get();
         break;
       case OB_EMPTY_CONE:
-        geom = ctx->shapes->empty_cone.get();
+        geom = ctx->res->shapes.empty_cone.get();
         break;
       case OB_ARROWS:
-        geom = ctx->shapes->arrows.get();
+        geom = ctx->res->shapes.arrows.get();
         break;
       case OB_EMPTY_IMAGE:
         /* Not supported. */
@@ -1220,8 +1220,8 @@ static void drw_shgroup_bone_relationship_lines_ex(const Armatures::DrawContext 
   float3 end_pt = math::transform_point(ctx->ob->object_to_world(), float3(end));
 
   if (ctx->is_overlay_next()) {
-    /* reverse order to have less stipple overlap */
-    ctx->bone_buf->relations_buf.append(start_pt, end_pt, float4(color));
+    /* Reverse order to have less stipple overlap. */
+    ctx->bone_buf->relations_buf.append(end_pt, start_pt, float4(color));
   }
 #ifndef NO_LEGACY_OVERLAY
   else {
@@ -2998,7 +2998,6 @@ void Armatures::draw_armature_pose(Armatures::DrawContext *ctx)
   const DRWContextState *draw_ctx = DRW_context_state_get();
   const Scene *scene = draw_ctx->scene;
   bArmature *arm = static_cast<bArmature *>(ob->data);
-  bPoseChannel *pchan;
   int index = -1;
   const bool show_text = DRW_state_show_text();
   bool draw_locked_weights = false;
@@ -3012,7 +3011,7 @@ void Armatures::draw_armature_pose(Armatures::DrawContext *ctx)
 
   bool is_pose_select = false;
   /* Object can be edited in the scene. */
-  if ((ob->base_flag & (BASE_FROM_SET | BASE_FROM_DUPLI)) == 0) {
+  if (!is_from_dupli_or_set(ob)) {
     if ((draw_ctx->object_mode & OB_MODE_POSE) || (ob == draw_ctx->object_pose)) {
       ctx->draw_mode = ARM_DRAW_MODE_POSE;
     }
@@ -3058,7 +3057,7 @@ void Armatures::draw_armature_pose(Armatures::DrawContext *ctx)
         continue;
       }
 
-      pchan = BKE_pose_channel_find_name(ob->pose, dg->name);
+      bPoseChannel *pchan = BKE_pose_channel_find_name(ob->pose, dg->name);
       if (!pchan) {
         continue;
       }
@@ -3076,7 +3075,7 @@ void Armatures::draw_armature_pose(Armatures::DrawContext *ctx)
       eArmature_Drawtype(arm->drawtype));
   const ArmatureBoneDrawStrategyCustomShape draw_strat_custom;
 
-  for (pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan;
+  for (bPoseChannel *pchan = static_cast<bPoseChannel *>(ob->pose->chanbase.first); pchan;
        pchan = pchan->next, index += 0x10000)
   {
     Bone *bone = pchan->bone;

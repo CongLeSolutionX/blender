@@ -48,6 +48,7 @@
 #include "BLT_translation.hh"
 
 #include "DNA_anim_types.h"
+#include "DNA_brush_types.h"
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_gpencil_modifier_types.h"
 #include "DNA_grease_pencil_types.h"
@@ -636,11 +637,11 @@ class AnimDataConvertor {
  * - Array of indices in the new vertex group list for remapping
  */
 static void find_used_vertex_groups(const bGPDframe &gpf,
-                                    const ListBase &all_names,
+                                    const ListBase &vertex_group_names,
+                                    const int num_vertex_groups,
                                     ListBase &r_vertex_group_names,
                                     Array<int> &r_indices)
 {
-  const int num_vertex_groups = BLI_listbase_count(&all_names);
   Array<int> is_group_used(num_vertex_groups, false);
   LISTBASE_FOREACH (bGPDstroke *, gps, &gpf.strokes) {
     if (!gps->dvert) {
@@ -649,7 +650,7 @@ static void find_used_vertex_groups(const bGPDframe &gpf,
     Span<MDeformVert> dverts = {gps->dvert, gps->totpoints};
     for (const MDeformVert &dvert : dverts) {
       for (const MDeformWeight &weight : Span<MDeformWeight>{dvert.dw, dvert.totweight}) {
-        if (weight.def_nr >= dvert.totweight) {
+        if (weight.def_nr >= num_vertex_groups) {
           /* Ignore invalid deform weight group indices. */
           continue;
         }
@@ -661,7 +662,7 @@ static void find_used_vertex_groups(const bGPDframe &gpf,
   r_indices.reinitialize(num_vertex_groups);
   int new_group_i = 0;
   int old_group_i;
-  LISTBASE_FOREACH_INDEX (const bDeformGroup *, def_group, &all_names, old_group_i) {
+  LISTBASE_FOREACH_INDEX (const bDeformGroup *, def_group, &vertex_group_names, old_group_i) {
     if (!is_group_used[old_group_i]) {
       r_indices[old_group_i] = -1;
       continue;
@@ -841,7 +842,9 @@ static Drawing legacy_gpencil_frame_to_grease_pencil_drawing(const bGPDframe &gp
   /* Find used vertex groups in this drawing. */
   ListBase stroke_vertex_group_names;
   Array<int> stroke_def_nr_map;
-  find_used_vertex_groups(gpf, vertex_group_names, stroke_vertex_group_names, stroke_def_nr_map);
+  const int num_vertex_groups = BLI_listbase_count(&vertex_group_names);
+  find_used_vertex_groups(
+      gpf, vertex_group_names, num_vertex_groups, stroke_vertex_group_names, stroke_def_nr_map);
   BLI_assert(BLI_listbase_is_empty(&curves.vertex_group_names));
   curves.vertex_group_names = stroke_vertex_group_names;
   const bool use_dverts = !BLI_listbase_is_empty(&curves.vertex_group_names);
@@ -852,7 +855,7 @@ static Drawing legacy_gpencil_frame_to_grease_pencil_drawing(const bGPDframe &gp
     dst_dvert.dw = static_cast<MDeformWeight *>(MEM_dupallocN(src_dvert.dw));
     const MutableSpan<MDeformWeight> vertex_weights = {dst_dvert.dw, dst_dvert.totweight};
     for (MDeformWeight &weight : vertex_weights) {
-      if (weight.def_nr >= dst_dvert.totweight) {
+      if (weight.def_nr >= num_vertex_groups) {
         /* Ignore invalid deform weight group indices. */
         continue;
       }
@@ -1062,7 +1065,10 @@ static void legacy_gpencil_to_grease_pencil(ConversionData &conversion_data,
 
     new_layer.parent = gpl->parent;
     new_layer.set_parent_bone_name(gpl->parsubstr);
-    copy_m4_m4(new_layer.parentinv, gpl->inverse);
+    /* GPv2 parent inverse matrix is only valid when parent is set. */
+    if (gpl->parent) {
+      copy_m4_m4(new_layer.parentinv, gpl->inverse);
+    }
 
     copy_v3_v3(new_layer.translation, gpl->location);
     copy_v3_v3(new_layer.rotation, gpl->rotation);

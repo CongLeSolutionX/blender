@@ -442,7 +442,7 @@ class LazyFunctionForForeachGeometryElementZone : public LazyFunction {
             continue;
           }
           const bke::CurvesGeometry &curves = drawing->strokes();
-          if (curves.curves_num() == 0) {
+          if (curves.is_empty()) {
             continue;
           }
           component_ids.append({component_type, iteration_domain, layer_i});
@@ -504,7 +504,7 @@ class LazyFunctionForForeachGeometryElementZone : public LazyFunction {
             eval_storage.main_geometry, id, mask, attribute_filter);
       }
 
-      /* Prepare remaining inputs that come from the field evaluation.*/
+      /* Prepare remaining inputs that come from the field evaluation. */
       component_info.item_input_values.reinitialize(node_storage.input_items.items_num);
       for (const int item_i : IndexRange(node_storage.input_items.items_num)) {
         const NodeForeachGeometryElementInputItem &item = node_storage.input_items.items[item_i];

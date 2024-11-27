@@ -142,7 +142,7 @@ void Camera::sync()
     BKE_camera_params_init(&params);
 
     if (inst_.rv3d->persp == RV3D_CAMOB && DRW_state_is_viewport_image_render()) {
-      /* We are rendering camera view, no need for pan/zoom params from viewport.*/
+      /* We are rendering camera view, no need for pan/zoom params from viewport. */
       BKE_camera_params_from_object(&params, camera_eval);
     }
     else {
@@ -159,6 +159,12 @@ void Camera::sync()
                                    params.viewplane,
                                    overscan_,
                                    data.winmat.ptr());
+
+    if (params.lens == 0.0f) {
+      /* Can happen for the case of XR.
+       * In this case the produced winmat is degenerate. So just revert to the input matrix. */
+      DRW_view_winmat_get(inst_.drw_view, data.winmat.ptr(), false);
+    }
   }
   else if (inst_.render) {
     const Render *re = inst_.render->re;

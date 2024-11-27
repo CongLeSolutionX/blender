@@ -11,12 +11,14 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 
 #include "BLI_vector.hh"
 #include "DNA_vec_types.h"
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
+#include "BLI_map.hh"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
@@ -25,7 +27,6 @@
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 #include "BLI_task.hh"
-#include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_packedFile_types.h"
@@ -66,6 +67,110 @@
 using namespace blender;
 
 static SeqEffectHandle get_sequence_effect_impl(int seq_type);
+
+/* -------------------------------------------------------------------- */
+/* Sequencer font access.
+ *
+ * Text strips can access and use fonts from a background thread
+ * (when depsgraph evaluation copies the scene, or when prefetch renders
+ * frames with text strips in a background thread).
+ *
+ * To not interfere with what might be happening on the main thread, all
+ * fonts used by the sequencer are made unique via #BLF_load_unique
+ * #BLF_load_mem_unique, and there's a mutex to guard against
+ * sequencer itself possibly using the fonts from several threads.
+ */
+
+struct SeqFontMap {
+  /* File path -> font ID mapping for file-based fonts. */
+  Map<std::string, int> path_to_file_font_id;
+  /* Datablock name -> font ID mapping for memory (datablock) fonts. */
+  Map<std::string, int> name_to_mem_font_id;
+
+  /* Font access mutex. Recursive since it is locked from
+   * text strip rendering, which can call into loading from within. */
+  std::recursive_mutex mutex;
+};
+
+static SeqFontMap g_font_map;
+
+void SEQ_fontmap_clear()
+{
+  for (const auto &item : g_font_map.path_to_file_font_id.items()) {
+    BLF_unload_id(item.value);
+  }
+  g_font_map.path_to_file_font_id.clear_and_shrink();
+  for (const auto &item : g_font_map.name_to_mem_font_id.items()) {
+    BLF_unload_id(item.value);
+  }
+  g_font_map.name_to_mem_font_id.clear_and_shrink();
+}
+
+static int seq_load_font_file(const std::string &path)
+{
+  std::lock_guard lock(g_font_map.mutex);
+  int fontid = g_font_map.path_to_file_font_id.add_or_modify(
+      path,
+      [&](int *fontid) {
+        /* New path: load font. */
+        *fontid = BLF_load_unique(path.c_str());
+        return *fontid;
+      },
+      [&](int *fontid) {
+        /* Path already in cache: add reference to already loaded font,
+         * or load a new one in case that
+         * font id was unloaded behind our backs. */
+        if (*fontid >= 0) {
+          if (BLF_is_loaded_id(*fontid)) {
+            BLF_addref_id(*fontid);
+          }
+          else {
+            *fontid = BLF_load_unique(path.c_str());
+          }
+        }
+        return *fontid;
+      });
+  return fontid;
+}
+
+static int seq_load_font_mem(const std::string &name, const unsigned char *data, int data_size)
+{
+  std::lock_guard lock(g_font_map.mutex);
+  int fontid = g_font_map.name_to_mem_font_id.add_or_modify(
+      name,
+      [&](int *fontid) {
+        /* New name: load font. */
+        *fontid = BLF_load_mem_unique(name.c_str(), data, data_size);
+        return *fontid;
+      },
+      [&](int *fontid) {
+        /* Name already in cache: add reference to already loaded font,
+         * or (if we're on the main thread) load a new one in case that
+         * font id was unloaded behind our backs. */
+        if (*fontid >= 0) {
+          if (BLF_is_loaded_id(*fontid)) {
+            BLF_addref_id(*fontid);
+          }
+          else {
+            *fontid = BLF_load_mem_unique(name.c_str(), data, data_size);
+          }
+        }
+        return *fontid;
+      });
+  return fontid;
+}
+
+static void seq_unload_font(int fontid)
+{
+  std::lock_guard lock(g_font_map.mutex);
+  bool unloaded = BLF_unload_id(fontid);
+  /* If that was the last usage of the font and it got unloaded: remove
+   * it from our maps. */
+  if (unloaded) {
+    g_font_map.path_to_file_font_id.remove_if([&](auto item) { return item.value == fontid; });
+    g_font_map.name_to_mem_font_id.remove_if([&](auto item) { return item.value == fontid; });
+  }
+}
 
 /* -------------------------------------------------------------------- */
 /** \name Internal Utilities
@@ -1012,13 +1117,11 @@ static void do_blend_mode_effect(const SeqRenderData *context,
 
 static void init_colormix_effect(Sequence *seq)
 {
-  ColorMixVars *data;
-
   if (seq->effectdata) {
     MEM_freeN(seq->effectdata);
   }
   seq->effectdata = MEM_callocN(sizeof(ColorMixVars), "colormixvars");
-  data = (ColorMixVars *)seq->effectdata;
+  ColorMixVars *data = (ColorMixVars *)seq->effectdata;
   data->blend_effect = SEQ_TYPE_OVERLAY;
   data->factor = 1.0f;
 }
@@ -1434,15 +1537,13 @@ static ImBuf *do_wipe_effect(const SeqRenderData *context,
 
 static void init_transform_effect(Sequence *seq)
 {
-  TransformVars *transform;
-
   if (seq->effectdata) {
     MEM_freeN(seq->effectdata);
   }
 
   seq->effectdata = MEM_callocN(sizeof(TransformVars), "transformvars");
 
-  transform = (TransformVars *)seq->effectdata;
+  TransformVars *transform = (TransformVars *)seq->effectdata;
 
   transform->ScalexIni = 1.0f;
   transform->ScaleyIni = 1.0f;
@@ -1625,7 +1726,8 @@ static void glow_blur_bitmap(
 
   Array<float4> temp(width * height);
 
-  /* Initialize the gaussian filter. @TODO: use code from RE_filter_value */
+  /* Initialize the gaussian filter.
+   * TODO: use code from #RE_filter_value. */
   Array<float> filter(halfWidth * 2);
   const float k = -1.0f / (2.0f * float(M_PI) * blur * blur);
   float weight = 0;
@@ -1711,15 +1813,13 @@ static void blur_isolate_highlights(const float4 *in,
 
 static void init_glow_effect(Sequence *seq)
 {
-  GlowVars *glow;
-
   if (seq->effectdata) {
     MEM_freeN(seq->effectdata);
   }
 
   seq->effectdata = MEM_callocN(sizeof(GlowVars), "glowvars");
 
-  glow = (GlowVars *)seq->effectdata;
+  GlowVars *glow = (GlowVars *)seq->effectdata;
   glow->fMini = 0.25;
   glow->fClamp = 1.0;
   glow->fBoost = 0.5;
@@ -1853,15 +1953,13 @@ static ImBuf *do_glow_effect(const SeqRenderData *context,
 
 static void init_solid_color(Sequence *seq)
 {
-  SolidColorVars *cv;
-
   if (seq->effectdata) {
     MEM_freeN(seq->effectdata);
   }
 
   seq->effectdata = MEM_callocN(sizeof(SolidColorVars), "solidcolor");
 
-  cv = (SolidColorVars *)seq->effectdata;
+  SolidColorVars *cv = (SolidColorVars *)seq->effectdata;
   cv->col[0] = cv->col[1] = cv->col[2] = 0.5;
 }
 
@@ -2065,15 +2163,13 @@ static ImBuf *do_adjustment(const SeqRenderData *context,
 
 static void init_speed_effect(Sequence *seq)
 {
-  SpeedControlVars *v;
-
   if (seq->effectdata) {
     MEM_freeN(seq->effectdata);
   }
 
   seq->effectdata = MEM_callocN(sizeof(SpeedControlVars), "speedcontrolvars");
 
-  v = (SpeedControlVars *)seq->effectdata;
+  SpeedControlVars *v = (SpeedControlVars *)seq->effectdata;
   v->speed_control_type = SEQ_SPEED_STRETCH;
   v->speed_fader = 1.0f;
   v->speed_fader_length = 0.0f;
@@ -2298,7 +2394,7 @@ static void init_gaussian_blur_effect(Sequence *seq)
     MEM_freeN(seq->effectdata);
   }
 
-  seq->effectdata = MEM_callocN(sizeof(WipeVars), "wipevars");
+  seq->effectdata = MEM_callocN(sizeof(GaussianBlurVars), "gaussianblurvars");
 }
 
 static int num_inputs_gaussian_blur()
@@ -2371,10 +2467,18 @@ static void gaussian_blur_x(const Span<float> gaussian,
         accum_weight += weight;
       }
       accum *= (1.0f / accum_weight);
-      dst[0] = accum[0];
-      dst[1] = accum[1];
-      dst[2] = accum[2];
-      dst[3] = accum[3];
+      if constexpr (math::is_math_float_type<T>) {
+        dst[0] = accum[0];
+        dst[1] = accum[1];
+        dst[2] = accum[2];
+        dst[3] = accum[3];
+      }
+      else {
+        dst[0] = accum[0] + 0.5f;
+        dst[1] = accum[1] + 0.5f;
+        dst[2] = accum[2] + 0.5f;
+        dst[3] = accum[3] + 0.5f;
+      }
       dst += 4;
     }
   }
@@ -2404,10 +2508,18 @@ static void gaussian_blur_y(const Span<float> gaussian,
         accum_weight += weight;
       }
       accum *= (1.0f / accum_weight);
-      dst[0] = accum[0];
-      dst[1] = accum[1];
-      dst[2] = accum[2];
-      dst[3] = accum[3];
+      if constexpr (math::is_math_float_type<T>) {
+        dst[0] = accum[0];
+        dst[1] = accum[1];
+        dst[2] = accum[2];
+        dst[3] = accum[3];
+      }
+      else {
+        dst[0] = accum[0] + 0.5f;
+        dst[1] = accum[1] + 0.5f;
+        dst[2] = accum[2] + 0.5f;
+        dst[3] = accum[3] + 0.5f;
+      }
       dst += 4;
     }
   }
@@ -2502,13 +2614,12 @@ static ImBuf *do_gaussian_blur_effect(const SeqRenderData *context,
 
 static void init_text_effect(Sequence *seq)
 {
-  TextVars *data;
-
   if (seq->effectdata) {
     MEM_freeN(seq->effectdata);
   }
 
-  data = static_cast<TextVars *>(seq->effectdata = MEM_callocN(sizeof(TextVars), "textvars"));
+  TextVars *data = static_cast<TextVars *>(
+      seq->effectdata = MEM_callocN(sizeof(TextVars), "textvars"));
   data->text_font = nullptr;
   data->text_blf_id = -1;
   data->text_size = 60.0f;
@@ -2523,6 +2634,7 @@ static void init_text_effect(Sequence *seq)
   data->box_color[2] = 0.2f;
   data->box_color[3] = 0.7f;
   data->box_margin = 0.01f;
+  data->box_roundness = 0.0f;
   data->outline_color[3] = 0.7f;
   data->outline_width = 0.05f;
 
@@ -2548,9 +2660,10 @@ void SEQ_effect_text_font_unload(TextVars *data, const bool do_id_user)
     data->text_font = nullptr;
   }
 
-  /* Unload the BLF font. */
+  /* Unload the font. */
   if (data->text_blf_id >= 0) {
-    BLF_unload_id(data->text_blf_id);
+    seq_unload_font(data->text_blf_id);
+    data->text_blf_id = -1;
   }
 }
 
@@ -2576,25 +2689,14 @@ void SEQ_effect_text_font_load(TextVars *data, const bool do_id_user)
     char name[MAX_ID_FULL_NAME];
     BKE_id_full_name_get(name, &vfont->id, 0);
 
-    data->text_blf_id = BLF_load_mem(name, static_cast<const uchar *>(pf->data), pf->size);
+    data->text_blf_id = seq_load_font_mem(name, static_cast<const uchar *>(pf->data), pf->size);
   }
   else {
     char filepath[FILE_MAX];
     STRNCPY(filepath, vfont->filepath);
-    if (BLI_thread_is_main()) {
-      /* FIXME: This is a band-aid fix.
-       * A proper solution has to be worked on by the sequencer team.
-       *
-       * This code can be called from non-main thread, e.g. when copying sequences as part of
-       * depsgraph evaluated copy of the evaluated scene. Just skip font loading in that case, BLF
-       * code is not thread-safe, and if this happens from threaded context, it almost certainly
-       * means that a previous attempt to load the font already failed, e.g. because font file-path
-       * is invalid. Proposer fix would likely be to not attempt to reload a failed-to-load font
-       * every time. */
-      BLI_path_abs(filepath, ID_BLEND_PATH_FROM_GLOBAL(&vfont->id));
 
-      data->text_blf_id = BLF_load(filepath);
-    }
+    BLI_path_abs(filepath, ID_BLEND_PATH_FROM_GLOBAL(&vfont->id));
+    data->text_blf_id = seq_load_font_file(filepath);
   }
 }
 
@@ -3033,9 +3135,9 @@ static rcti draw_text_outline(const SeqRenderData *context,
 }
 
 /* Similar to #IMB_rectfill_area but blends the given color under the
- * existing image. Also only works on byte buffers. */
+ * existing image. Also can do rounded corners. Only works on byte buffers. */
 static void fill_rect_alpha_under(
-    const ImBuf *ibuf, const float col[4], int x1, int y1, int x2, int y2)
+    const ImBuf *ibuf, const float col[4], int x1, int y1, int x2, int y2, float corner_radius)
 {
   const int width = ibuf->x;
   const int height = ibuf->y;
@@ -3053,19 +3155,59 @@ static void fill_rect_alpha_under(
     return;
   }
 
-  float4 premul_col = col;
-  straight_to_premul_v4(premul_col);
+  corner_radius = math::clamp(corner_radius, 0.0f, math::min(x2 - x1, y2 - y1) / 2.0f);
 
-  for (int y = y1; y < y2; y++) {
-    uchar *dst = ibuf->byte_buffer.data + (size_t(width) * y + x1) * 4;
-    for (int x = x1; x < x2; x++) {
-      float4 pix = load_premul_pixel(dst);
-      float fac = 1.0f - pix.w;
-      float4 dst_fl = fac * premul_col + pix;
-      store_premul_pixel(dst_fl, dst);
-      dst += 4;
+  float4 premul_col_base;
+  straight_to_premul_v4_v4(premul_col_base, col);
+
+  threading::parallel_for(IndexRange::from_begin_end(y1, y2), 16, [&](const IndexRange y_range) {
+    for (const int y : y_range) {
+      uchar *dst = ibuf->byte_buffer.data + (size_t(width) * y + x1) * 4;
+      float origin_x = 0.0f, origin_y = 0.0f;
+      for (int x = x1; x < x2; x++) {
+        float4 pix = load_premul_pixel(dst);
+        float fac = 1.0f - pix.w;
+
+        float4 premul_col = premul_col_base;
+        bool is_corner = false;
+        if (x < x1 + corner_radius && y < y1 + corner_radius) {
+          is_corner = true;
+          origin_x = x1 + corner_radius - 1;
+          origin_y = y1 + corner_radius - 1;
+        }
+        else if (x >= x2 - corner_radius && y < y1 + corner_radius) {
+          is_corner = true;
+          origin_x = x2 - corner_radius;
+          origin_y = y1 + corner_radius - 1;
+        }
+        else if (x < x1 + corner_radius && y >= y2 - corner_radius) {
+          is_corner = true;
+          origin_x = x1 + corner_radius - 1;
+          origin_y = y2 - corner_radius;
+        }
+        else if (x >= x2 - corner_radius && y >= y2 - corner_radius) {
+          is_corner = true;
+          origin_x = x2 - corner_radius;
+          origin_y = y2 - corner_radius;
+        }
+        if (is_corner) {
+          /* If we are inside rounded corner, evaluate a superellipse and
+           * modulate color with that. Superellipse instead of just a circle
+           * since the curvature between flat and rounded area looks a bit
+           * nicer. */
+          constexpr float curve_pow = 2.1f;
+          float r = powf(powf(abs(x - origin_x), curve_pow) + powf(abs(y - origin_y), curve_pow),
+                         1.0f / curve_pow);
+          float alpha = math::clamp(corner_radius - r, 0.0f, 1.0f);
+          premul_col *= alpha;
+        }
+
+        float4 dst_fl = fac * premul_col + pix;
+        store_premul_pixel(dst_fl, dst);
+        dst += 4;
+      }
     }
-  }
+  });
 }
 
 static int text_effect_line_size_get(const SeqRenderData *context, const Sequence *seq)
@@ -3084,6 +3226,11 @@ static int text_effect_font_init(const SeqRenderData *context, const Sequence *s
 {
   TextVars *data = static_cast<TextVars *>(seq->effectdata);
   int font = blf_mono_font_render;
+
+  /* In case font got unloaded behind our backs: mark it as needing a load. */
+  if (data->text_blf_id >= 0 && !BLF_is_loaded_id(data->text_blf_id)) {
+    data->text_blf_id = SEQ_FONT_NOT_LOADED;
+  }
 
   if (data->text_blf_id == SEQ_FONT_NOT_LOADED) {
     data->text_blf_id = -1;
@@ -3302,6 +3449,9 @@ static ImBuf *do_text_effect(const SeqRenderData *context,
   const int font_flags = ((data->flag & SEQ_TEXT_BOLD) ? BLF_BOLD : 0) |
                          ((data->flag & SEQ_TEXT_ITALIC) ? BLF_ITALIC : 0);
 
+  /* Guard against parallel accesses to the fonts map. */
+  std::lock_guard lock(g_font_map.mutex);
+
   const int font = text_effect_font_init(context, seq, font_flags);
 
   TextVarsRuntime runtime;
@@ -3326,7 +3476,8 @@ static ImBuf *do_text_effect(const SeqRenderData *context,
       const int maxx = runtime.text_boundbox.xmax + margin;
       const int miny = runtime.text_boundbox.ymin - margin;
       const int maxy = runtime.text_boundbox.ymax + margin;
-      fill_rect_alpha_under(out, data->box_color, minx, miny, maxx, maxy);
+      float corner_radius = data->box_roundness * (maxy - miny) / 2.0f;
+      fill_rect_alpha_under(out, data->box_color, minx, miny, maxx, maxy, corner_radius);
     }
   }
 

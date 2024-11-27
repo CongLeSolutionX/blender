@@ -39,7 +39,6 @@
 #include "BKE_context.hh"
 #include "BKE_deform.hh"
 #include "BKE_global.hh"
-#include "BKE_gpencil_curve_legacy.h"
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_lib_id.hh"
@@ -147,11 +146,7 @@ static bool annotation_actframe_delete_poll(bContext *C)
 /* delete active frame - wrapper around API calls */
 static int gpencil_actframe_delete_exec(bContext *C, wmOperator *op)
 {
-  const bool is_annotation = STREQ(op->idname, "GPENCIL_OT_annotation_active_frame_delete");
-
-  bGPdata *gpd = (!is_annotation) ? ED_gpencil_data_get_active(C) :
-                                    ED_annotation_data_get_active(C);
-
+  bGPdata *gpd = ED_annotation_data_get_active(C);
   bGPDlayer *gpl = BKE_gpencil_layer_active_get(gpd);
 
   Scene *scene = CTX_data_scene(C);

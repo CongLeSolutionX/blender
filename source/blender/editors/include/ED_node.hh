@@ -25,6 +25,9 @@ struct uiLayout;
 
 namespace blender::ed::space_node {
 
+/** Update the active node tree based on the context. */
+void snode_set_context(const bContext &C);
+
 VectorSet<bNode *> get_selected_nodes(bNodeTree &node_tree);
 
 /**
@@ -44,8 +47,6 @@ void node_insert_on_link_flags_clear(bNodeTree &node_tree);
 
 /**
  * Draw a single node socket at default size.
- * \note this is only called from external code, internally #node_socket_draw_nested() is used for
- *       optimized drawing of multiple/all sockets of a node.
  */
 void node_socket_draw(bNodeSocket *sock, const rcti *rect, const float color[4], float scale);
 

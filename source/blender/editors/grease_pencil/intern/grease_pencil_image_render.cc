@@ -9,7 +9,7 @@
 #include "BKE_attribute.hh"
 #include "BKE_camera.h"
 #include "BKE_curves.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_material.h"
 
 #include "BLI_math_vector.hh"
@@ -354,9 +354,9 @@ static void draw_grease_pencil_stroke(const float4x4 &transform,
 
   immEnd();
 
-  /* Expanded drawcall. */
+  /* Expanded `drawcall`. */
   GPUPrimType expand_prim_type = GPUPrimType::GPU_PRIM_TRIS;
-  /* Hardcoded in shader. */
+  /* Hard-coded in shader. */
   const uint expand_prim_len = 12;
   /* Do not count adjacency info for start and end primitives. */
   const uint final_vert_len = ((batch->vertex_count_get() - 2) * expand_prim_len) * 3;
