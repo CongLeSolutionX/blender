@@ -205,6 +205,7 @@ void MeshFromGeometry::create_faces(Mesh *mesh, bool use_vertex_groups)
     dverts = mesh->deform_verts_for_write();
   }
 
+  Span<float3> positions = mesh->vert_positions();
   MutableSpan<int> face_offsets = mesh->face_offsets_for_write();
   MutableSpan<int> corner_verts = mesh->corner_verts_for_write();
   bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
@@ -227,27 +228,9 @@ void MeshFromGeometry::create_faces(Mesh *mesh, bool use_vertex_groups)
 
     face_offsets[face_idx] = corner_index;
     if (set_face_sharpness) {
-      /* If we have no vertex normals, set face sharpness flag based
+      /* If we have no vertex normals, set face sharpness flag based on
        * whether smooth shading is off. */
       sharp_faces.span[face_idx] = !curr_face.shaded_smooth;
-    }
-    else {
-      /* If we do have vertex normals, we do not want to set
-       * face sharpness. Exception is, if degenerate faces (zero area,
-       * with co-colocated vertices) are present in the input data, this
-       * confuses custom corner normals calculation in Blender.
-       * Set such faces as sharp, they will be not shared across
-       * smooth vertex face fans. */
-      Array<int, 8> face_global_vertex_indices(curr_face.corner_count_);
-      for (int idx = 0; idx < curr_face.corner_count_; ++idx) {
-        face_global_vertex_indices[idx] =
-            mesh_geometry_.face_corners_[curr_face.start_index_ + idx].vert_index;
-      }
-      const float area = bke::mesh::face_area_calc(global_vertices_.vertices,
-                                                   face_global_vertex_indices);
-      if (area < 1.0e-12f) {
-        sharp_faces.span[face_idx] = true;
-      }
     }
 
     material_indices.span[face_idx] = curr_face.material_index;
@@ -274,6 +257,19 @@ void MeshFromGeometry::create_faces(Mesh *mesh, bool use_vertex_groups)
       }
 
       corner_index++;
+    }
+
+    if (!set_face_sharpness) {
+      /* If we do have vertex normals, we do not want to set face sharpness.
+       * Exception is, if degenerate faces (zero area, with co-colocated
+       * vertices) are present in the input data; this confuses custom
+       * corner normals calculation in Blender. Set such faces as sharp,
+       * they will be not shared across smooth vertex face fans. */
+      const float area = bke::mesh::face_area_calc(
+          positions, corner_verts.slice(face_offsets[face_idx], curr_face.corner_count_));
+      if (area < 1.0e-12f) {
+        sharp_faces.span[face_idx] = true;
+      }
     }
   }
 
