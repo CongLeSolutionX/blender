@@ -198,12 +198,12 @@ static blender::animrig::Action &extract_pose(Main &bmain, Object &pose_object)
       }
       Vector<float> values = blender::animrig::get_rna_values(&resolved_pointer,
                                                               resolved_property);
-      int i = 0;
       const std::optional<std::string> rna_path_id_to_prop = RNA_path_from_ID_to_property(
           &resolved_pointer, resolved_property);
       if (!rna_path_id_to_prop.has_value()) {
         continue;
       }
+      int i = 0;
       for (const float value : values) {
         strip_data.keyframe_insert(
             &bmain, slot, {rna_path_id_to_prop.value(), i}, {1, value}, key_settings);
@@ -342,7 +342,9 @@ static bAction *action_from_selected_asset(bContext *C)
       bke::asset_edit_id_from_weak_reference(*bmain, ID_AC, asset_reference));
 }
 
-static void update_pose_action_from_scene(blender::animrig::Action &action, Object &pose_object)
+static void update_pose_action_from_scene(Main *bmain,
+                                          blender::animrig::Action &action,
+                                          Object &pose_object)
 {
   if (action.slot_array_num < 1) {
     /* All actions should have slots at this point. */
@@ -356,6 +358,12 @@ static void update_pose_action_from_scene(blender::animrig::Action &action, Obje
         existing_paths.add({fcurve.rna_path, std::nullopt, fcurve.array_index});
       });
 
+  blender::animrig::KeyframeSettings key_settings = {BEZT_KEYTYPE_KEYFRAME, HD_AUTO, BEZT_IPO_BEZ};
+  BLI_assert(action.strip_keyframe_data_array_num == 1);
+  BLI_assert(action.slot_array_num == 1);
+  blender::animrig::StripKeyframeData *strip_data = action.strip_keyframe_data()[0];
+  blender::animrig::Slot *slot = action.slot(0);
+
   LISTBASE_FOREACH (bPoseChannel *, pose_bone, &pose_object.pose->chanbase) {
     if (!(pose_bone->bone->flag & BONE_SELECTED)) {
       continue;
@@ -366,7 +374,22 @@ static void update_pose_action_from_scene(blender::animrig::Action &action, Obje
     if (!RNA_path_resolve(&bone_pointer, "location", &resolved_pointer, &resolved_property)) {
       continue;
     }
+    const std::optional<std::string> rna_path_id_to_prop = RNA_path_from_ID_to_property(
+        &resolved_pointer, resolved_property);
+    if (!rna_path_id_to_prop.has_value()) {
+      continue;
+    }
     Vector<float> values = blender::animrig::get_rna_values(&resolved_pointer, resolved_property);
+    int i = 0;
+    for (const float value : values) {
+      RNAPath path = {rna_path_id_to_prop.value(), std::nullopt, i};
+      /* Only updating existing channels. */
+      if (existing_paths.contains(path)) {
+        strip_data->keyframe_insert(
+            bmain, *slot, {rna_path_id_to_prop.value(), i}, {1, value}, key_settings);
+      }
+      i++;
+    }
   }
 }
 
@@ -381,7 +404,7 @@ static int pose_asset_overwrite_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  update_pose_action_from_scene(action->wrap(), *pose_object);
+  update_pose_action_from_scene(bmain, action->wrap(), *pose_object);
 
   bke::asset_edit_id_save(*bmain, action->id, *op->reports);
 
