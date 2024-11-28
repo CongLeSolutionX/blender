@@ -18,26 +18,27 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Int>("Token Position");
 }
 
-std::u32string bli_str_utf8_as_u32string(const std::string &src_c)
+std::u32string bli_str_utf8_as_u32string(const StringRef u8src)
 {
-  const size_t src_c_len = src_c.size();
-  std::u32string result;
-  result.reserve(src_c_len); 
-
-  const char *src_c_end = src_c.data() + src_c_len;
+  std::u32string u32out;
+  const int u8src_len = u8src.size();
+  u32out.reserve(u8src_len);
+  const char *src_c_end = u8src.data() + u8src_len;
   size_t index = 0;
-  while (index < src_c_len) {
-    const uint unicode = BLI_str_utf8_as_unicode_step_or_error(src_c.data(), src_c_len, &index);
+
+  while (index < u8src_len) {
+    const uint unicode = BLI_str_utf8_as_unicode_step_or_error(u8src.data(), u8src_len, &index);
     if (unicode != BLI_UTF8_ERR) {
-      result.push_back(unicode);
-    } else {
-      result.push_back('?');
-      const char *src_c_next = BLI_str_find_next_char_utf8(src_c.data() + index, src_c_end);
-      index = size_t(src_c_next - src_c.data());
+      u32out.push_back(unicode);
+    }
+    else {
+      u32out.push_back(' ');
+      const char *src_c_next = BLI_str_find_next_char_utf8(u8src.data() + index, src_c_end);
+      index = size_t(src_c_next - u8src.data());
     }
   }
 
-  return result;
+  return u32out;
 }
 
 static int string_find_token(const StringRef text,
