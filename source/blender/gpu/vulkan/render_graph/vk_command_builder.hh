@@ -170,12 +170,6 @@ class VKCommandBuilder {
                             NodeHandle node_handle);
 
   /**
-   * Return the full debug group of the given node_handle. Returns an empty string when debug
-   * groups are not enabled (`--debug-gpu`).
-   */
-  std::string full_debug_group(VKRenderGraph &render_graph, NodeHandle node_handle) const;
-
-  /**
    * Make sure no debugging groups are active anymore.
    */
   void finish_debug_groups(VKCommandBufferInterface &command_buffer);
