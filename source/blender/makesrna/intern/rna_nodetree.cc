@@ -610,6 +610,27 @@ static const EnumPropertyItem node_cryptomatte_layer_name_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+const EnumPropertyItem rna_enum_node_category_items[] = {
+    {NODE_CLASS_INPUT, "INPUT", 0, "Input", ""},
+    {NODE_CLASS_OUTPUT, "OUTPUT", 0, "Output", ""},
+    {NODE_CLASS_OP_COLOR, "COLOR", 0, "Color", ""},
+    {NODE_CLASS_OP_VECTOR, "VECTOR", 0, "Vector", ""},
+    {NODE_CLASS_OP_FILTER, "FILTER", 0, "Filter", ""},
+    {NODE_CLASS_GROUP, "GROUP", 0, "Group", ""},
+    {NODE_CLASS_CONVERTER, "CONVERTER", 0, "Converter", ""},
+    {NODE_CLASS_MATTE, "MATTE", 0, "Matte", ""},
+    {NODE_CLASS_DISTORT, "DISTORT", 0, "Distort", ""},
+    {NODE_CLASS_PATTERN, "PATTERN", 0, "Pattern", ""},
+    {NODE_CLASS_TEXTURE, "TEXTURE", 0, "Texture", ""},
+    {NODE_CLASS_SCRIPT, "SCRIPT", 0, "Script", ""},
+    {NODE_CLASS_INTERFACE, "INTERFACE", 0, "Interface", ""},
+    {NODE_CLASS_SHADER, "SHADER", 0, "Shader", ""},
+    {NODE_CLASS_GEOMETRY, "GEOMETRY", 0, "Geometry", ""},
+    {NODE_CLASS_ATTRIBUTE, "ATTRIBUTE", 0, "Attribute", ""},
+    {NODE_CLASS_LAYOUT, "LAYOUT", 0, "Layout", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 #endif /* !RNA_RUNTIME */
 
 #undef ITEM_ATTRIBUTE
@@ -2435,6 +2456,14 @@ static void rna_Node_name_set(PointerRNA *ptr, const char *value)
 
   /* fix all the animation data which may link to this */
   BKE_animdata_fix_paths_rename_all(nullptr, "nodes", oldname, node->name);
+}
+
+static int rna_Node_category_get(PointerRNA *ptr)
+{
+  bNode *node = static_cast<bNode *>(ptr->data);
+
+  return node->typeinfo->ui_class == nullptr ? node->typeinfo->nclass :
+                                               node->typeinfo->ui_class(node);
 }
 
 static bool allow_changing_sockets(bNode *node)
@@ -10737,6 +10766,12 @@ static void rna_def_node(BlenderRNA *brna)
   RNA_def_property_string_sdna(prop, nullptr, "label");
   RNA_def_property_ui_text(prop, "Label", "Optional custom node label");
   RNA_def_property_update(prop, NC_NODE | ND_DISPLAY, nullptr);
+
+  prop = RNA_def_property(srna, "category", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_node_category_items);
+  RNA_def_property_enum_funcs(prop, "rna_Node_category_get", nullptr, nullptr);
+  RNA_def_property_ui_text(prop, "Category", "");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
   prop = RNA_def_property(srna, "inputs", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_collection_sdna(prop, nullptr, "inputs", nullptr);
