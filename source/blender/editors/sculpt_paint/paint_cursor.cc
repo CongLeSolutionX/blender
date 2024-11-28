@@ -36,6 +36,7 @@
 #include "NOD_texture.h"
 
 #include "WM_api.hh"
+#include "WM_toolsystem.hh"
 #include "wm_cursors.hh"
 
 #include "IMB_colormanagement.hh"
@@ -1312,7 +1313,9 @@ static bool paint_cursor_context_init(bContext *C,
   if (pcontext->paint == nullptr) {
     return false;
   }
-  pcontext->brush = BKE_paint_brush(pcontext->paint);
+  pcontext->brush = pcontext->brush = WM_toolsystem_active_tool_is_brush(pcontext->C) ?
+                                          BKE_paint_brush(pcontext->paint) :
+                                          nullptr;
   if (pcontext->brush == nullptr) {
     return false;
   }
