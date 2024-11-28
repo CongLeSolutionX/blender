@@ -286,6 +286,7 @@ VkPipeline VKPipelinePool::get_or_create_graphics_pipeline(VKGraphicsInfo &graph
       graphics_info.fragment_shader.scissors.size();
 
   /* Color blending */
+  const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
   {
     VkPipelineColorBlendStateCreateInfo &cb = vk_pipeline_color_blend_state_create_info_;
     VkPipelineColorBlendAttachmentState &att_state =
@@ -408,6 +409,12 @@ VkPipeline VKPipelinePool::get_or_create_graphics_pipeline(VKGraphicsInfo &graph
       att_state.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
     }
 
+    /* Logic ops. */
+    if (graphics_info.state.logic_op_xor && !workarounds.logic_ops) {
+      cb.logicOpEnable = VK_TRUE;
+      cb.logicOp = VK_LOGIC_OP_XOR;
+    }
+
     vk_pipeline_color_blend_attachment_states_.clear();
     vk_pipeline_color_blend_attachment_states_.append_n_times(
         vk_pipeline_color_blend_attachment_state_template_,
@@ -525,7 +532,6 @@ VkPipeline VKPipelinePool::get_or_create_graphics_pipeline(VKGraphicsInfo &graph
   }
 
   /* VK_KHR_dynamic_rendering */
-  const VKWorkarounds &workarounds = VKBackend::get().device.workarounds_get();
   if (workarounds.dynamic_rendering) {
     BLI_assert(ELEM(
         vk_graphics_pipeline_create_info_.pNext, &vk_pipeline_rendering_create_info_, nullptr));
