@@ -787,10 +787,10 @@ class GREASE_PENCIL_MT_stroke_simplify(Menu):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator("grease_pencil.stroke_simplify", text="Fixed").mode='FIXED'
-        layout.operator("grease_pencil.stroke_simplify", text="Adaptive").mode='ADAPTIVE'
-        layout.operator("grease_pencil.stroke_simplify", text="Sample").mode='SAMPLE'
-        layout.operator("grease_pencil.stroke_simplify", text="Merge").mode='MERGE'
+        layout.operator("grease_pencil.stroke_simplify", text="Fixed").mode = 'FIXED'
+        layout.operator("grease_pencil.stroke_simplify", text="Adaptive").mode = 'ADAPTIVE'
+        layout.operator("grease_pencil.stroke_simplify", text="Sample").mode = 'SAMPLE'
+        layout.operator("grease_pencil.stroke_simplify", text="Merge").mode = 'MERGE'
 
 
 classes = (
@@ -805,7 +805,7 @@ classes = (
     GREASE_PENCIL_MT_snap_pie,
 
     GREASE_PENCIL_MT_draw_delete,
-    
+
     GREASE_PENCIL_MT_stroke_simplify,
 
     GreasePencilFlipTintColors,
