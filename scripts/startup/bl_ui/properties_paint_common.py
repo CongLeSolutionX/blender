@@ -319,8 +319,9 @@ class BrushSelectPanel(BrushPanel):
             return
 
         if brush.has_unsaved_changes:
-            layout.label(text="*Unsaved Changes")
-            layout.separator()
+            self.bl_label = "Brush Asset (Unsaved)"
+        else:
+            self.bl_label = "Brush Asset"
 
     def draw(self, context):
         layout = self.layout
