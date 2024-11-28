@@ -197,14 +197,14 @@ extern LONG WINAPI windows_exception_handler(EXCEPTION_POINTERS *ExceptionInfo)
               " " + build_commit_time + ", hash: `" + build_hash + "`";
 #    endif
 
-    char filepath[FILE_MAX];
-    crashlog_filepath_get(filepath);
-    crashlog_file_generate(filepath, ExceptionInfo);
-    BLI_windows_exception_show_dialog(
-        ExceptionInfo, filepath, GPU_platform_gpu_name(), version.c_str());
-    if (G.filepath_last_blend[0]) {
-      ShellExecute(nullptr, "open", G.filepath_last_blend, nullptr, nullptr, SW_SHOWNORMAL);
-    }
+    char filepath_crashlog[FILE_MAX];
+    crashlog_filepath_get(filepath_crashlog);
+    crashlog_file_generate(filepath_crashlog, ExceptionInfo);
+    BLI_windows_exception_show_dialog(ExceptionInfo,
+                                      filepath_crashlog,
+                                      G.filepath_last_blend,
+                                      GPU_platform_gpu_name(),
+                                      version.c_str());
     sig_cleanup_and_terminate(SIGSEGV);
   }
 

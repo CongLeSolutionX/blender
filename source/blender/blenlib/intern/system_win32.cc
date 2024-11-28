@@ -434,9 +434,9 @@ static void bli_windows_exception_message_get(const EXCEPTION_POINTERS *exceptio
 /** \name bli_show_message_box
  * \{ */
 
-static std::string url_encode(const std::string &str)
+static std::wstring url_encode(const std::string &str)
 {
-  std::ostringstream encoded;
+  std::wostringstream encoded;
   encoded << std::hex << std::uppercase;
 
   for (const char c : str) {
@@ -444,10 +444,10 @@ static std::string url_encode(const std::string &str)
       encoded << c;
     }
     else if (c == ' ') {
-      encoded << '+';
+      encoded << L'+';
     }
     else {
-      encoded << '%' << std::setw(2) << std::setfill('0') << int(uchar(c));
+      encoded << L'%' << std::setw(2) << std::setfill(L'0') << int(uchar(c));
     }
   }
   return encoded.str();
@@ -501,25 +501,31 @@ static std::string get_os_info()
  * Displays a crash popup with options to open the crash log and report a bug.
  * This is based on the `showMessageBox` function in `GHOST_SystemWin32.cc`.
  */
-static void bli_show_message_box(const char *filepath,
+static void bli_show_message_box(const char *filepath_crashlog,
+                                 const char *filepath_relaunch,
                                  const char *gpu_name,
                                  const char *build_version)
 {
-  /* InitCommonControls is called during GHOST System initialization, so this is redundant. */
+  /* Redundant: InitCommonControls is already called during GHOST System initialization. */
   // InitCommonControls();
 
-  /* Convert `filepath` to UTF-16 to handle non-ASCII characters. */
-  wchar_t *filepath_utf16 = alloc_utf16_from_8(filepath, 0);
+  /* Convert file paths to UTF-16 to handle non-ASCII characters. */
+  wchar_t *filepath_crashlog_utf16 = alloc_utf16_from_8(filepath_crashlog, 0);
+  wchar_t *filepath_relaunch_utf16 = filepath_relaunch[0] ?
+                                         alloc_utf16_from_8(filepath_relaunch, 0) :
+                                         nullptr;
+
   std::wstring full_message_16 =
       L"The application encountered a fatal error and will close.\n\n"
       L"If you know the steps to reproduce this crash, please file a bug report.\n\n"
       L"The crash log can be found at:\n" +
-      std::wstring(filepath_utf16);
-  free((void *)filepath_utf16);
+      std::wstring(filepath_crashlog_utf16);
 
   TASKDIALOGCONFIG config = {0};
-  const TASKDIALOG_BUTTON buttons[] = {
-      {IDOK, L"Report a Bug"}, {IDHELP, L"Open Crash Log"}, {IDCLOSE, L"Close"}};
+  const TASKDIALOG_BUTTON buttons[] = {{IDRETRY, L"Retry"},
+                                       {IDOK, L"Report a Bug"},
+                                       {IDHELP, L"Open Crash Log"},
+                                       {IDCLOSE, L"Close"}};
 
   config.cbSize = sizeof(config);
   config.hInstance = 0;
@@ -528,44 +534,67 @@ static void bli_show_message_box(const char *filepath,
   config.pszWindowTitle = L"Blender";
   config.pszMainInstruction = L"Blender has crashed!";
   config.pszContent = full_message_16.c_str();
-  config.pButtons = buttons;
-  config.cButtons = ARRAY_SIZE(buttons);
+  if (filepath_relaunch_utf16) {
+    config.pButtons = buttons;
+    config.cButtons = ARRAY_SIZE(buttons);
+  }
+  else {
+    /* Exclude the Retry button. */
+    config.pButtons = buttons + 1;
+    config.cButtons = ARRAY_SIZE(buttons) - 1;
+  }
 
-  /* Lambda callback for handling button events. */
-  const char *data[] = {filepath, gpu_name, build_version};
-  config.lpCallbackData = reinterpret_cast<LONG_PTR>(data);
+  /* Data passed to the callback function for handling button events. */
+  const struct Data {
+    const wchar_t *filepath_crashlog_utf16;
+    const wchar_t *filepath_relaunch_utf16;
+    const char *gpu_name;
+    const char *build_version;
+  } data = {filepath_crashlog_utf16, filepath_relaunch_utf16, gpu_name, build_version};
+  config.lpCallbackData = reinterpret_cast<LONG_PTR>(&data);
+
+  /* Callback for handling button events. */
   config.pfCallback = [](HWND /*hwnd*/,
                          UINT uNotification,
                          WPARAM wParam,
                          LPARAM /*lParam*/,
                          LONG_PTR dwRefData) -> HRESULT {
+    const Data *data_ptr = reinterpret_cast<const Data *>(dwRefData);
     if (uNotification != TDN_BUTTON_CLICKED) {
       return S_OK;
     }
-    char *const *data_ptr = reinterpret_cast<char *const *>(dwRefData);
-    const char *data_filepath = data_ptr[0];
-    const char *data_gpu_name = data_ptr[1];
-    const char *data_build_version = data_ptr[2];
-
     int pnButton = static_cast<int>(wParam);
     switch (pnButton) {
       case IDCLOSE:
         return S_OK;
+      case IDRETRY:
+        if (data_ptr->filepath_relaunch_utf16) {
+          /* Relaunch the application. */
+          ShellExecuteW(nullptr,
+                        L"open",
+                        data_ptr->filepath_relaunch_utf16,
+                        nullptr,
+                        nullptr,
+                        SW_SHOWNORMAL);
+        }
+        return S_OK;
       case IDHELP:
         /* Open the crash log. */
-        ShellExecute(nullptr, "open", data_filepath, nullptr, nullptr, SW_SHOWNORMAL);
+        ShellExecuteW(
+            nullptr, L"open", data_ptr->filepath_crashlog_utf16, nullptr, nullptr, SW_SHOWNORMAL);
         return S_FALSE;
       case IDOK: {
+        /* Open the bug report form with pre-filled data. */
         /* clang-format off */
-        std::string link =
-            "https://redirect.blender.org/"
-            "?type=bug_report"
-            "&project=blender"
-            "&os=" + url_encode(get_os_info()) +
-            "&gpu=" + url_encode(data_gpu_name) +
-            "&broken_version=" + url_encode(data_build_version);
+        std::wstring link =
+            L"https://redirect.blender.org/"
+            L"?type=bug_report"
+            L"&project=blender"
+            L"&os=" + url_encode(get_os_info()) +
+            L"&gpu=" + url_encode(data_ptr->gpu_name) +
+            L"&broken_version=" + url_encode(data_ptr->build_version);
         /* clang-format on */
-        ShellExecute(nullptr, "open", link.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        ShellExecuteW(nullptr, L"open", link.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         return S_FALSE;
       }
       default:
@@ -574,14 +603,17 @@ static void bli_show_message_box(const char *filepath,
   };
 
   TaskDialogIndirect(&config, nullptr, nullptr, nullptr);
+  free((void *)filepath_crashlog_utf16);
+  free((void *)filepath_relaunch_utf16);
 }
 
 void BLI_windows_exception_show_dialog(const void *exception,
-                                       const char *filepath,
+                                       const char *filepath_crashlog,
+                                       const char *filepath_relaunch,
                                        const char *gpu_name,
                                        const char *build_version)
 {
-  bli_show_message_box(filepath, gpu_name, build_version);
+  bli_show_message_box(filepath_crashlog, filepath_relaunch, gpu_name, build_version);
 
   char message[512];
   bli_windows_exception_message_get(static_cast<const EXCEPTION_POINTERS *>(exception), message);
