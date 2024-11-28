@@ -405,7 +405,6 @@ class ShaderModule {
   ShaderPtr particle_shape;
   ShaderPtr particle_hair;
   ShaderPtr wireframe_mesh;
-  ShaderPtr wireframe_mesh_depth_bias;
   ShaderPtr wireframe_curve;
   ShaderPtr wireframe_points; /* Draw objects without edges for the wireframe overlay. */
 

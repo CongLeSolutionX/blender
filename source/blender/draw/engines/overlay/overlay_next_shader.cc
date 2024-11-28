@@ -627,7 +627,7 @@ ShaderModule::ShaderModule(const SelectionType selection_type, const bool clippi
 
   wireframe_mesh = selectable_shader("overlay_wireframe", [](gpu::shader::ShaderCreateInfo &info) {
     info.additional_infos_.clear();
-    // info.define("CUSTOM_DEPTH_BIAS_CONST");
+    info.define("CUSTOM_DEPTH_BIAS_CONST");
     info.specialization_constant(gpu::shader::Type::BOOL, "use_custom_depth_bias", true);
     info.additional_info("draw_view",
                          "draw_modelmat_new",
@@ -635,18 +635,6 @@ ShaderModule::ShaderModule(const SelectionType selection_type, const bool clippi
                          "draw_object_infos_new",
                          "draw_globals");
   });
-
-  wireframe_mesh_depth_bias = selectable_shader(
-      "overlay_wireframe", [](gpu::shader::ShaderCreateInfo &info) {
-        info.additional_infos_.clear();
-        info.define("CUSTOM_DEPTH_BIAS");
-        info.specialization_constant(gpu::shader::Type::BOOL, "use_custom_depth_bias", true);
-        info.additional_info("draw_view",
-                             "draw_modelmat_new",
-                             "draw_resource_handle_new",
-                             "draw_object_infos_new",
-                             "draw_globals");
-      });
 
   wireframe_points = selectable_shader("overlay_wireframe_points",
                                        [](gpu::shader::ShaderCreateInfo & /*info*/) {});
