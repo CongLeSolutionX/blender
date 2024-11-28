@@ -673,22 +673,8 @@ static bool region_poll(const bContext *C,
                         const ScrArea *area,
                         const ARegion *region)
 {
-  /* Region type may not be set yet after file read, because area/region initialization is about to
-   * happen still. Only set the type temporarily here, permanently setting it as a side effect
-   * isn't very nice, and might hide further issues. */
-  ARegionType *prev_region_type = region->runtime->type;
   if (!region->runtime->type) {
-    const SpaceType *space_type = BKE_spacetype_from_id(area->spacetype);
-    if (!space_type) {
-      /* In case of old files with invalid space types. */
-      space_type = BKE_spacetype_from_id(SPACE_VIEW3D);
-    }
-    region->runtime->type = BKE_regiontype_from_id(space_type, region->regiontype);
-    BLI_assert_msg(region->runtime->type != nullptr, "Region type not valid for this space type");
-  }
-  BLI_SCOPED_DEFER([&]() { region->runtime->type = prev_region_type; });
-
-  if (!region->runtime->type) {
+    BLI_assert_unreachable();
     return false;
   }
   if (!region->runtime->type->poll) {
@@ -817,6 +803,13 @@ void ED_screens_init(bContext *C, Main *bmain, wmWindowManager *wm)
     if (BKE_workspace_active_get(win->workspace_hook) == nullptr) {
       BKE_workspace_active_set(win->workspace_hook,
                                static_cast<WorkSpace *>(bmain->workspaces.first));
+    }
+
+    const bScreen *screen = WM_window_get_active_screen(win);
+    ED_screen_areas_iter (win, screen, area) {
+      /* Ensure area and region types are set before doing any other area/region level things, they
+       * might be required. */
+      ED_area_and_region_types_init(area);
     }
 
     ED_screen_refresh(C, wm, win);
