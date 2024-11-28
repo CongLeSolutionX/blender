@@ -18,7 +18,7 @@
 #include "BKE_callbacks.hh"
 #include "BKE_context.hh"
 #include "BKE_global.hh"
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_material.h"
@@ -107,7 +107,7 @@ struct CompoJob {
 
 float node_socket_calculate_height(const bNodeSocket &socket)
 {
-  float sock_height = NODE_SOCKSIZE * NODE_SOCKSIZE_DRAW_MULIPLIER;
+  float sock_height = NODE_SOCKSIZE;
   if (socket.flag & SOCK_MULTI_INPUT) {
     sock_height += max_ii(NODE_MULTI_INPUT_LINK_GAP * 0.5f * socket.runtime->total_inputs,
                           NODE_SOCKSIZE);
@@ -965,12 +965,28 @@ static void node_resize_exit(bContext *C, wmOperator *op, bool cancel)
   op->customdata = nullptr;
 }
 
+/* Compute the nearest 1D coordinate corresponding to the nearest grid in node. */
+static float nearest_node_grid_coord(float co)
+{
+  float grid_size = ED_node_grid_size();
+  float rest = fmod(co, grid_size);
+  float offset = rest - grid_size / 2 >= 0 ? grid_size : 0;
+
+  return co - rest + offset;
+}
+
 static int node_resize_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
+  Scene *scene = CTX_data_scene(C);
   ARegion *region = CTX_wm_region(C);
   bNode *node = bke::node_get_active(snode->edittree);
   NodeSizeWidget *nsw = (NodeSizeWidget *)op->customdata;
+
+  bool snap_to_grid = scene->toolsettings->snap_flag_node;
+  if (event->modifier & KM_CTRL) {
+    snap_to_grid = !snap_to_grid;
+  }
 
   switch (event->type) {
     case MOUSEMOVE: {
@@ -978,7 +994,7 @@ static int node_resize_modal(bContext *C, wmOperator *op, const wmEvent *event)
       WM_event_drag_start_mval(event, region, mval);
       float mx, my;
       UI_view2d_region_to_view(&region->v2d, mval.x, mval.y, &mx, &my);
-      const float dx = (mx - nsw->mxstart) / UI_SCALE_FAC;
+      float dx = (mx - nsw->mxstart) / UI_SCALE_FAC;
       const float dy = (my - nsw->mystart) / UI_SCALE_FAC;
 
       if (node) {
@@ -990,11 +1006,18 @@ static int node_resize_modal(bContext *C, wmOperator *op, const wmEvent *event)
         {
           if (nsw->directions & NODE_RESIZE_RIGHT) {
             *pwidth = oldwidth + dx;
+
+            if (snap_to_grid) {
+              *pwidth = nearest_node_grid_coord(*pwidth);
+            }
             CLAMP(*pwidth, widthmin, widthmax);
           }
           if (nsw->directions & NODE_RESIZE_LEFT) {
             float locmax = nsw->oldlocx + oldwidth;
 
+            if (snap_to_grid) {
+              dx = nearest_node_grid_coord(dx);
+            }
             node->locx = nsw->oldlocx + dx;
             CLAMP(node->locx, locmax - widthmax, locmax - widthmin);
             *pwidth = locmax - node->locx;

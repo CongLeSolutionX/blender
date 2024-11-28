@@ -16,6 +16,7 @@
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 
+#include "BLI_array_utils.hh"
 #include "BLI_math_geom.h"
 #include "BLI_math_numbers.hh"
 #include "BLI_math_vector.hh"
@@ -334,6 +335,24 @@ float3 DrawingPlacement::project(const float2 co) const
   else {
     if (plane_ == DrawingPlacementPlane::View) {
       ED_view3d_win_to_3d(view3d_, region_, placement_loc_, co, proj_point);
+    }
+    else {
+      ED_view3d_win_to_3d_on_plane(region_, placement_plane_, co, false, proj_point);
+    }
+  }
+  return math::transform_point(world_space_to_layer_space_, proj_point);
+}
+
+float3 DrawingPlacement::project_with_shift(const float2 co) const
+{
+  float3 proj_point;
+  if (depth_ == DrawingPlacementDepth::Surface) {
+    /* Project using the viewport depth cache. */
+    proj_point = this->project_depth(co);
+  }
+  else {
+    if (plane_ == DrawingPlacementPlane::View) {
+      ED_view3d_win_to_3d_with_shift(view3d_, region_, placement_loc_, co, proj_point);
     }
     else {
       ED_view3d_win_to_3d_on_plane(region_, placement_plane_, co, false, proj_point);

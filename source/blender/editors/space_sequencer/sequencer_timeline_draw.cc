@@ -26,6 +26,7 @@
 #include "BKE_context.hh"
 #include "BKE_fcurve.hh"
 #include "BKE_global.hh"
+#include "BKE_screen.hh"
 #include "BKE_sound.h"
 
 #include "ED_anim_api.hh"
@@ -1921,7 +1922,7 @@ static void draw_timeline_gizmos(TimelineDrawContext *ctx)
     return;
   }
 
-  WM_gizmomap_draw(ctx->region->gizmo_map, ctx->C, WM_GIZMOMAP_DRAWSTEP_2D);
+  WM_gizmomap_draw(ctx->region->runtime->gizmo_map, ctx->C, WM_GIZMOMAP_DRAWSTEP_2D);
 }
 
 static void draw_timeline_pre_view_callbacks(TimelineDrawContext *ctx)
@@ -1984,6 +1985,10 @@ void draw_timeline_seq_display(const bContext *C, ARegion *region)
     const ListBase *seqbase = SEQ_active_seqbase_get(SEQ_editing_get(scene));
     SEQ_timeline_boundbox(scene, seqbase, &v2d->tot);
     const rcti scroller_mask = ED_time_scrub_clamp_scroller_mask(v2d->mask);
+    region->v2d.scroll |= V2D_SCROLL_BOTTOM;
     UI_view2d_scrollers_draw(v2d, &scroller_mask);
+  }
+  else {
+    region->v2d.scroll &= ~V2D_SCROLL_BOTTOM;
   }
 }

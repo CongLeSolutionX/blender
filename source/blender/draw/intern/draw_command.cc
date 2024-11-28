@@ -170,12 +170,21 @@ void Draw::execute(RecordingState &state) const
     GPU_batch_resource_id_buf_set(batch, state.resource_id_buf);
   }
 
+  /* Use same logic as in `finalize_commands`. */
+  uint instance_first = 0;
+  if (handle.raw > 0) {
+    instance_first = state.instance_offset;
+    state.instance_offset += instance_len;
+  }
+
   if (is_primitive_expansion()) {
     /* Expanded drawcall. */
-    IndexRange vert_range = GPU_batch_draw_expanded_parameter_get(
-        batch, GPUPrimType(expand_prim_type), vertex_len, vertex_first);
-    IndexRange expanded_range = {vert_range.start() * expand_prim_len,
-                                 vert_range.size() * expand_prim_len};
+    IndexRange expanded_range = GPU_batch_draw_expanded_parameter_get(
+        batch->prim_type,
+        GPUPrimType(expand_prim_type),
+        vertex_len,
+        vertex_first,
+        expand_prim_len);
 
     if (expanded_range.is_empty()) {
       /* Nothing to draw, and can lead to asserts in GPU_batch_bind_as_resources. */
@@ -187,12 +196,12 @@ void Draw::execute(RecordingState &state) const
     gpu::Batch *gpu_batch = procedural_batch_get(GPUPrimType(expand_prim_type));
     GPU_batch_set_shader(gpu_batch, state.shader);
     GPU_batch_draw_advanced(
-        gpu_batch, expanded_range.start(), expanded_range.size(), 0, instance_len);
+        gpu_batch, expanded_range.start(), expanded_range.size(), instance_first, instance_len);
   }
   else {
     /* Regular drawcall. */
     GPU_batch_set_shader(batch, state.shader);
-    GPU_batch_draw_advanced(batch, vertex_first, vertex_len, 0, instance_len);
+    GPU_batch_draw_advanced(batch, vertex_first, vertex_len, instance_first, instance_len);
   }
 }
 
@@ -560,7 +569,7 @@ std::string DrawMulti::serialize(const std::string &line_prefix) const
   std::sort(
       prototypes.begin(), prototypes.end(), [](const DrawPrototype &a, const DrawPrototype &b) {
         return (a.group_id < b.group_id) ||
-               (a.group_id == b.group_id && a.resource_handle > b.resource_handle);
+               (a.group_id == b.group_id && a.res_handle > b.res_handle);
       });
 
   /* Compute prefix sum to have correct offsets. */
@@ -584,7 +593,7 @@ std::string DrawMulti::serialize(const std::string &line_prefix) const
     if (grp.back_facing_counter > 0) {
       for (DrawPrototype &proto : prototypes.slice_safe({offset, grp.back_facing_counter})) {
         BLI_assert(proto.group_id == group_index);
-        ResourceHandle handle(proto.resource_handle);
+        ResourceHandle handle(proto.res_handle);
         BLI_assert(handle.has_inverted_handedness());
         ss << std::endl
            << line_prefix << "    .proto(instance_len=" << std::to_string(proto.instance_len)
@@ -596,7 +605,7 @@ std::string DrawMulti::serialize(const std::string &line_prefix) const
     if (grp.front_facing_counter > 0) {
       for (DrawPrototype &proto : prototypes.slice_safe({offset, grp.front_facing_counter})) {
         BLI_assert(proto.group_id == group_index);
-        ResourceHandle handle(proto.resource_handle);
+        ResourceHandle handle(proto.res_handle);
         BLI_assert(!handle.has_inverted_handedness());
         ss << std::endl
            << line_prefix << "    .proto(instance_len=" << std::to_string(proto.instance_len)
@@ -718,6 +727,11 @@ void DrawCommandBuf::finalize_commands(Vector<Header, 0> &headers,
       cmd.vertex_len = batch_vert_len;
     }
 
+    /* NOTE: Only do this if a handle is present. If a drawcall is using instancing with null
+     * handle, the shader should not rely on `resource_id` at ***all***. This allows procedural
+     * instanced drawcalls with lots of instances with no overhead. */
+    /* TODO(fclem): Think about either fixing this feature or removing support for instancing all
+     * together. */
     if (cmd.handle.raw > 0) {
       /* Save correct offset to start of resource_id buffer region for this draw. */
       uint instance_first = resource_id_count;
@@ -738,7 +752,10 @@ void DrawCommandBuf::generate_commands(Vector<Header, 0> &headers,
                                        Vector<Undetermined, 0> &commands,
                                        SubPassVector &sub_passes)
 {
-  resource_id_count_ = 0;
+  /* First instance ID contains the null handle with identity transform.
+   * This is referenced for drawcalls with no handle. */
+  resource_id_buf_.get_or_resize(0) = 0;
+  resource_id_count_ = 1;
   finalize_commands(headers, commands, sub_passes, resource_id_count_, resource_id_buf_);
   resource_id_buf_.push_update();
 }
@@ -788,13 +805,14 @@ void DrawMultiBuf::generate_commands(Vector<Header, 0> & /*headers*/,
     if (group.desc.expand_prim_type != GPU_PRIM_NONE) {
       /* Expanded drawcall. */
       IndexRange vert_range = GPU_batch_draw_expanded_parameter_get(
-          group.desc.gpu_batch,
+          group.desc.gpu_batch->prim_type,
           GPUPrimType(group.desc.expand_prim_type),
           group.vertex_len,
-          group.vertex_first);
+          group.vertex_first,
+          group.desc.expand_prim_len);
 
-      group.vertex_first = vert_range.start() * group.desc.expand_prim_len;
-      group.vertex_len = vert_range.size() * group.desc.expand_prim_len;
+      group.vertex_first = vert_range.start();
+      group.vertex_len = vert_range.size();
       /* Override base index to -1 as the generated drawcall will not use an index buffer and do
        * the indirection manually inside the shader. */
       group.base_index = -1;

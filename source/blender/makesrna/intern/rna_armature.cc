@@ -689,6 +689,7 @@ static void rna_Armature_redraw_data(Main * /*bmain*/, Scene * /*scene*/, Pointe
 
   DEG_id_tag_update(id, ID_RECALC_SYNC_TO_EVAL);
   WM_main_add_notifier(NC_GEOM | ND_DATA, id);
+  WM_main_add_notifier(NC_SPACE | ND_SPACE_OUTLINER, nullptr);
 }
 
 /* Unselect bones when hidden or not selectable. */
@@ -1847,7 +1848,7 @@ static void rna_def_edit_bone(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "head", PROP_FLOAT, PROP_TRANSLATION);
   RNA_def_property_float_sdna(prop, nullptr, "head");
-  RNA_def_property_ui_range(prop, 0, FLT_MAX, 10, RNA_TRANSLATION_PREC_DEFAULT);
+  RNA_def_property_ui_range(prop, -FLT_MAX, FLT_MAX, 10, RNA_TRANSLATION_PREC_DEFAULT);
   RNA_def_property_array(prop, 3);
   RNA_def_property_ui_text(prop, "Head", "Location of head end of the bone");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
@@ -1855,7 +1856,7 @@ static void rna_def_edit_bone(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "tail", PROP_FLOAT, PROP_TRANSLATION);
   RNA_def_property_float_sdna(prop, nullptr, "tail");
-  RNA_def_property_ui_range(prop, 0, FLT_MAX, 10, RNA_TRANSLATION_PREC_DEFAULT);
+  RNA_def_property_ui_range(prop, -FLT_MAX, FLT_MAX, 10, RNA_TRANSLATION_PREC_DEFAULT);
   RNA_def_property_array(prop, 3);
   RNA_def_property_ui_text(prop, "Tail", "Location of tail end of the bone");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);

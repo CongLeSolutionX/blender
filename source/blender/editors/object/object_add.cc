@@ -2225,12 +2225,6 @@ static int object_delete_exec(bContext *C, wmOperator *op)
       continue;
     }
 
-    /* if grease pencil object, set cache as dirty */
-    if (ob->type == OB_GPENCIL_LEGACY) {
-      bGPdata *gpd = (bGPdata *)ob->data;
-      DEG_id_tag_update(&gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
-    }
-
     /* Use multi tagged delete if `use_global=True`, or the object is used only in one scene. */
     if (use_global || ID_REAL_USERS(ob) <= 1) {
       ob->id.tag |= ID_TAG_DOIT;
@@ -2240,18 +2234,6 @@ static int object_delete_exec(bContext *C, wmOperator *op)
       /* Object is used in multiple scenes. Delete the object from the current scene only. */
       base_free_and_unlink_no_indirect_check(bmain, scene, ob);
       changed_count += 1;
-
-      /* FIXME: this will also remove parent from grease pencil from other scenes. */
-      /* Remove from Grease Pencil parent */
-      LISTBASE_FOREACH (bGPdata *, gpd, &bmain->gpencils) {
-        LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
-          if (gpl->parent != nullptr) {
-            if (gpl->parent == ob) {
-              gpl->parent = nullptr;
-            }
-          }
-        }
-      }
     }
   }
   CTX_DATA_END;
@@ -2739,13 +2721,6 @@ static const EnumPropertyItem convert_target_items[] = {
 #else
      "Mesh from Curve, Surface, Metaball, or Text objects"},
 #endif
-#if 0
-    {OB_GPENCIL_LEGACY,
-     "GPENCIL",
-     ICON_OUTLINER_OB_GREASEPENCIL,
-     "Grease Pencil",
-     "Grease Pencil from Curve or Mesh objects"},
-#endif
 #ifdef WITH_POINT_CLOUD
     {OB_POINTCLOUD,
      "POINTCLOUD",
@@ -2984,10 +2959,6 @@ static int object_convert_exec(bContext *C, wmOperator *op)
          * would keep modifiers on all but the converted object #26003. */
         if (ob->type == OB_MESH) {
           BKE_object_free_modifiers(ob, 0); /* after derivedmesh calls! */
-        }
-        if (ob->type == OB_GPENCIL_LEGACY) {
-          BKE_object_free_modifiers(ob, 0); /* after derivedmesh calls! */
-          BKE_object_free_shaderfx(ob, 0);
         }
       }
     }
@@ -4273,14 +4244,7 @@ static bool object_join_poll(bContext *C)
     return false;
   }
 
-  if (ELEM(ob->type,
-           OB_MESH,
-           OB_CURVES_LEGACY,
-           OB_SURF,
-           OB_ARMATURE,
-           OB_GPENCIL_LEGACY,
-           OB_GREASE_PENCIL))
-  {
+  if (ELEM(ob->type, OB_MESH, OB_CURVES_LEGACY, OB_SURF, OB_ARMATURE, OB_GREASE_PENCIL)) {
     return true;
   }
   return false;
@@ -4305,14 +4269,6 @@ static int object_join_exec(bContext *C, wmOperator *op)
                 "Cannot edit object '%s' as it is used by override collections",
                 ob->id.name + 2);
     return OPERATOR_CANCELLED;
-  }
-
-  if (ob->type == OB_GPENCIL_LEGACY) {
-    bGPdata *gpd = (bGPdata *)ob->data;
-    if ((!gpd) || GPENCIL_ANY_MODE(gpd)) {
-      BKE_report(op->reports, RPT_ERROR, "This data does not support joining in this mode");
-      return OPERATOR_CANCELLED;
-    }
   }
 
   int ret = OPERATOR_CANCELLED;

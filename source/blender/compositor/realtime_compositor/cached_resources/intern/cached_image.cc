@@ -12,14 +12,13 @@
 
 #include "RE_pipeline.h"
 
-#include "GPU_shader.hh"
 #include "GPU_texture.hh"
 
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
-#include "BKE_image.h"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 
 #include "DNA_ID.h"

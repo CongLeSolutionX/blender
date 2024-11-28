@@ -337,8 +337,17 @@ static void nla_panel_animdata(const bContext *C, Panel *panel)
 
   /* Active Action Properties ------------------------------------- */
   /* action */
-  row = uiLayoutRow(layout, true);
-  uiTemplateID(row, C, &adt_ptr, "action", "ACTION_OT_new", nullptr, "NLA_OT_action_unlink");
+  uiLayout *col = uiLayoutColumn(layout, true);
+  uiTemplateID(col, C, &adt_ptr, "action", "ACTION_OT_new", nullptr, "NLA_OT_action_unlink");
+  uiTemplateSearch(col,
+                   C,
+                   &adt_ptr,
+                   "action_slot",
+                   &adt_ptr,
+                   "action_suitable_slots",
+                   nullptr,
+                   nullptr,
+                   IFACE_("Slot"));
 
   /* extrapolation */
   row = uiLayoutRow(layout, true);
@@ -498,7 +507,7 @@ static void nla_panel_actclip(const bContext *C, Panel *panel)
                        &strip_ptr,
                        "action_slot",
                        &strip_ptr,
-                       "action_slots",
+                       "action_suitable_slots",
                        nullptr,
                        "anim.slot_unassign_from_nla_strip",
                        "Slot");

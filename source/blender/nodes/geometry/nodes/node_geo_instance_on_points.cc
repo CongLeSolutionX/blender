@@ -49,7 +49,7 @@ static void add_instances_from_component(
     const GeometrySet &instance,
     const fn::FieldContext &field_context,
     const GeoNodeExecParams &params,
-    const Map<StringRef, AttributeKind> &attributes_to_propagate)
+    const Map<StringRef, AttributeDomainAndType> &attributes_to_propagate)
 {
   const AttrDomain domain = AttrDomain::Point;
   const int domain_num = src_attributes.domain_size(domain);
@@ -203,7 +203,7 @@ static void node_geo_exec(GeoNodeExecParams params)
                                                GeometryComponent::Type::PointCloud,
                                                GeometryComponent::Type::Curve};
 
-    Map<StringRef, AttributeKind> attributes_to_propagate;
+    Map<StringRef, AttributeDomainAndType> attributes_to_propagate;
     geometry_set.gather_attributes_for_propagation(types,
                                                    GeometryComponent::Type::Instance,
                                                    false,
@@ -234,7 +234,7 @@ static void node_geo_exec(GeoNodeExecParams params)
           continue;
         }
         const bke::CurvesGeometry &src_curves = drawing->strokes();
-        if (src_curves.curves_num() == 0) {
+        if (src_curves.is_empty()) {
           /* Add an empty reference so the number of layers and instances match.
            * This makes it easy to reconstruct the layers afterwards and keep their attributes.
            * Although in this particular case we don't propagate the attributes. */
@@ -256,10 +256,12 @@ static void node_geo_exec(GeoNodeExecParams params)
         const int handle = instances->add_reference(bke::InstanceReference{temp_set});
         instances->add_instance(handle, float4x4::identity());
       }
-      GeometrySet::propagate_attributes_from_layer_to_instances(
-          geometry_set.get_grease_pencil()->attributes(),
-          instances->attributes_for_write(),
-          attribute_filter);
+
+      bke::copy_attributes(geometry_set.get_grease_pencil()->attributes(),
+                           bke::AttrDomain::Layer,
+                           bke::AttrDomain::Instance,
+                           attribute_filter,
+                           instances->attributes_for_write());
       GeometrySet new_instances = geometry::join_geometries(
           {GeometrySet::from_instances(dst_instances, bke::GeometryOwnershipType::Editable),
            GeometrySet::from_instances(instances)},
