@@ -482,6 +482,8 @@ set(GLSL_SRC
   shaders/gpu_shader_2D_widget_base_frag.glsl
   shaders/gpu_shader_2D_widget_shadow_vert.glsl
   shaders/gpu_shader_2D_widget_shadow_frag.glsl
+  shaders/gpu_shader_2D_node_socket_frag.glsl
+  shaders/gpu_shader_2D_node_socket_vert.glsl
   shaders/gpu_shader_2D_nodelink_frag.glsl
   shaders/gpu_shader_2D_nodelink_vert.glsl
   shaders/gpu_shader_2D_line_dashed_frag.glsl
@@ -502,9 +504,7 @@ set(GLSL_SRC
   shaders/gpu_shader_3D_flat_color_vert.glsl
   shaders/gpu_shader_3D_line_dashed_uniform_color_vert.glsl
   shaders/gpu_shader_3D_polyline_frag.glsl
-  shaders/gpu_shader_3D_polyline_geom.glsl
   shaders/gpu_shader_3D_polyline_vert.glsl
-  shaders/gpu_shader_3D_polyline_vert_no_geom.glsl
   shaders/gpu_shader_3D_smooth_color_vert.glsl
   shaders/gpu_shader_3D_smooth_color_frag.glsl
   shaders/gpu_shader_3D_clipped_uniform_color_vert.glsl
@@ -746,6 +746,10 @@ endif()
 
 if(WITH_GPU_DRAW_TESTS)
   add_definitions(-DWITH_GPU_DRAW_TESTS)
+endif()
+
+if(WITH_GTEST)
+  add_definitions(-DWITH_GTEST)
 endif()
 
 blender_add_lib(bf_gpu "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
