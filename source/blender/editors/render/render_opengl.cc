@@ -407,7 +407,7 @@ static void screen_opengl_render_doit(const bContext *C, OGLRender *oglrender, R
   if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
     GPU_flush();
   }
-  GPU_render_step();
+  GPU_render_step(true);
 }
 
 static void screen_opengl_render_write(OGLRender *oglrender)

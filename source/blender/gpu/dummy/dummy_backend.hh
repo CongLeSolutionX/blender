@@ -96,7 +96,7 @@ class DummyBackend : public GPUBackend {
   void shader_cache_dir_clear_old() override {}
   void render_begin() override {}
   void render_end() override {}
-  void render_step() override {}
+  void render_step(bool) override {}
 };
 
 }  // namespace blender::gpu
