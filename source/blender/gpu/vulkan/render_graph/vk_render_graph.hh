@@ -103,7 +103,7 @@ class VKRenderGraph : public NonCopyable {
     /** Current stack of debug group names. */
     Vector<DebugGroupNameID> group_stack;
     /** Has a node been added to the current stack? If not the group stack will be added to
-     * used_groups.*/
+     * used_groups. */
     bool group_used = false;
     /** All used debug groups. */
     Vector<Vector<DebugGroupNameID>> used_groups;
@@ -248,6 +248,12 @@ class VKRenderGraph : public NonCopyable {
    * group.
    */
   void debug_group_end();
+
+  /**
+   * Return the full debug group of the given node_handle. Returns an empty string when debug
+   * groups are not enabled (`--debug-gpu`).
+   */
+  std::string full_debug_group(NodeHandle node_handle) const;
 
   /**
    * Utility function that is used during debugging.
