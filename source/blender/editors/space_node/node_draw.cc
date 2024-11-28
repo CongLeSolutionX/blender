@@ -1292,8 +1292,8 @@ static void node_update_hidden(bNode &node, uiBlock &block)
     if (socket->is_visible()) {
       /* Round the socket location to stop it from jiggling. */
       socket->runtime->location = {
-                                   round(node.runtime->totr.xmax - hiddenrad + sinf(rad) * hiddenrad),
-                                   round(node.runtime->totr.ymin + hiddenrad + cosf(rad) * hiddenrad)};
+          round(node.runtime->totr.xmax - hiddenrad + sinf(rad) * hiddenrad),
+          round(node.runtime->totr.ymin + hiddenrad + cosf(rad) * hiddenrad)};
       rad += drad;
     }
   }
@@ -1305,8 +1305,8 @@ static void node_update_hidden(bNode &node, uiBlock &block)
     if (socket->is_visible()) {
       /* Round the socket location to stop it from jiggling. */
       socket->runtime->location = {
-                                   round(node.runtime->totr.xmin + hiddenrad + sinf(rad) * hiddenrad),
-                                   round(node.runtime->totr.ymin + hiddenrad + cosf(rad) * hiddenrad)};
+          round(node.runtime->totr.xmin + hiddenrad + sinf(rad) * hiddenrad),
+          round(node.runtime->totr.ymin + hiddenrad + cosf(rad) * hiddenrad)};
       rad += drad;
     }
   }
@@ -1858,17 +1858,17 @@ static std::optional<std::string> create_log_inspection_string(geo_log::GeoTreeL
   ValueLog *value_log = geo_tree_log->find_socket_value_log(socket);
   fmt::memory_buffer buf;
   if (const geo_log::GenericValueLog *generic_value_log =
-      dynamic_cast<const geo_log::GenericValueLog *>(value_log))
+          dynamic_cast<const geo_log::GenericValueLog *>(value_log))
   {
     create_inspection_string_for_generic_value(socket, generic_value_log->value, buf);
   }
   else if (const geo_log::FieldInfoLog *gfield_value_log =
-           dynamic_cast<const geo_log::FieldInfoLog *>(value_log))
+               dynamic_cast<const geo_log::FieldInfoLog *>(value_log))
   {
     create_inspection_string_for_field_info(socket, *gfield_value_log, buf);
   }
   else if (const geo_log::GeometryInfoLog *geo_value_log =
-           dynamic_cast<const geo_log::GeometryInfoLog *>(value_log))
+               dynamic_cast<const geo_log::GeometryInfoLog *>(value_log))
   {
     create_inspection_string_for_geometry_info(*geo_value_log, buf);
   }
@@ -2426,7 +2426,7 @@ static void node_draw_panels_background(const bNode &node)
     const bke::bNodePanelRuntime &final_panel_runtime =
         node.runtime->panels[final_panel_decl->index];
     const rctf content_rect = {
-                               totr.xmin, totr.xmax, totr.ymin, final_panel_runtime.content_extent->min_y};
+        totr.xmin, totr.xmax, totr.ymin, final_panel_runtime.content_extent->min_y};
     UI_draw_roundbox_corner_set(UI_CNR_BOTTOM_RIGHT | UI_CNR_BOTTOM_LEFT);
     const int repeats = final_panel_decl->depth() + 1;
     for ([[maybe_unused]] const int i : IndexRange(repeats)) {
@@ -2718,7 +2718,7 @@ static std::optional<std::chrono::nanoseconds> compositor_accumulate_frame_node_
   for (const bNode *current_node : node.direct_children_in_frame()) {
     const bNodeInstanceKey key = current_node_instance_key(snode, *current_node);
     if (const timeit::Nanoseconds *node_execution_time =
-        tree_draw_ctx.compositor_per_node_execution_time->lookup_ptr(key))
+            tree_draw_ctx.compositor_per_node_execution_time->lookup_ptr(key))
     {
       frame_execution_time += *node_execution_time;
       has_any_execution_time = true;
@@ -2746,7 +2746,7 @@ static std::optional<std::chrono::nanoseconds> compositor_node_get_execution_tim
    * The group node instances have their own entries in the execution times map. */
   const bNodeInstanceKey key = current_node_instance_key(snode, node);
   if (const timeit::Nanoseconds *execution_time =
-      tree_draw_ctx.compositor_per_node_execution_time->lookup_ptr(key))
+          tree_draw_ctx.compositor_per_node_execution_time->lookup_ptr(key))
   {
     return *execution_time;
   }

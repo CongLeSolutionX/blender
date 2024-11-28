@@ -324,7 +324,7 @@ static void calculate_bezier_handles_bezier_mode(const Span<float3> src_handles_
        * handles, but have a specific length to best approximate a circle.
        */
 
-              // No index check needed; the first point is not filleted unless the curve is cyclic
+      // No index check needed; the first point is not filleted unless the curve is cyclic
       const int i_src_prev = i_src == i_src_first ? i_src_last : i_src - 1;
       const bool is_previous_zero_edge = zero_edge_buffer[i_src_prev];
       const float angle = angles[i_src];
@@ -357,7 +357,6 @@ static void calculate_bezier_handles_bezier_mode(const Span<float3> src_handles_
 
       dst_handles_l[i_dst_arc_end] = arc_end - next_dir * handle_length;
       dst_types_l[i_dst_arc_end] = BEZIER_HANDLE_ALIGN;
-
     }
   });
 }
@@ -432,7 +431,7 @@ static bke::CurvesGeometry fillet_curves(
   IndexMaskMemory memory;
   const IndexMask unselected = curve_selection.complement(src_curves.curves_range(), memory);
 
-          // Create mostly un-initialized curve geometry
+  // Create mostly un-initialized curve geometry
   bke::CurvesGeometry dst_curves = bke::curves::copy_only_curve_domain(src_curves);
 
   Array<float3> directions;
