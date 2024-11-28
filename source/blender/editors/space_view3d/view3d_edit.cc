@@ -29,6 +29,8 @@
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
 
+#include "BLT_translation.hh"
+
 #include "DEG_depsgraph_query.hh"
 
 #include "WM_api.hh"
@@ -1261,22 +1263,14 @@ static std::string toggle_xray_get_description(bContext *C,
                                                wmOperatorType * /*ot*/,
                                                PointerRNA * /*ptr*/)
 {
-  PropertyRNA *prop;
-
-  /* Dynamically get the operator description from the current X-Ray mode UI text. */
   switch (get_current_xray_mode(C)) {
     case XRayMode::Wireframe:
-      prop = RNA_struct_type_find_property(&RNA_View3DShading, "show_xray_wireframe");
-      break;
+      return TIP_("Transparent wireframe display. Allow selecting through items");
     case XRayMode::Bone:
-      prop = RNA_struct_type_find_property(&RNA_View3DOverlay, "show_xray_bone");
-      break;
+      return TIP_("Transparent mesh display. Display bones in front");
     default:
-      prop = RNA_struct_type_find_property(&RNA_View3DShading, "show_xray");
-      break;
+      return {}; /* Default operator description. */
   }
-
-  return RNA_property_ui_description(prop);
 }
 
 void VIEW3D_OT_toggle_xray(wmOperatorType *ot)
@@ -1284,6 +1278,7 @@ void VIEW3D_OT_toggle_xray(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Toggle X-Ray";
   ot->idname = "VIEW3D_OT_toggle_xray";
+  ot->description = "Transparent display. Allow selecting through items";
 
   /* api callbacks */
   ot->exec = toggle_xray_exec;
