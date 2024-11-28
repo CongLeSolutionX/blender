@@ -21,7 +21,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 std::u32string bli_str_utf8_as_u32string(const StringRef u8src)
 {
   std::u32string u32out;
-  const int u8src_len = u8src.size();
+  const size_t u8src_len = u8src.size();
   u32out.reserve(u8src_len);
   const char *src_c_end = u8src.data() + u8src_len;
   size_t index = 0;
@@ -73,7 +73,7 @@ static void node_build_multi_function(NodeMultiFunctionBuilder &builder)
         if (text == nullptr || token == nullptr || text.empty() || token.empty()) {
           return 0;
         }
-        else if (next == 0) {
+        else if (next <= 0) {
           return 0;
         }
         return string_find_token(text, token, start, next);
