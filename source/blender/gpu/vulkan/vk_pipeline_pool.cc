@@ -598,6 +598,7 @@ VkPipeline VKPipelinePool::get_or_create_graphics_pipeline(VKGraphicsInfo &graph
   vk_pipeline_viewport_state_create_info_.pViewports = nullptr;
   vk_pipeline_viewport_state_create_info_.viewportCount = 0;
   vk_pipeline_color_blend_state_create_info_.attachmentCount = 0;
+  vk_pipeline_color_blend_state_create_info_.logicOpEnable = VK_FALSE;
   vk_pipeline_color_blend_state_create_info_.pAttachments = nullptr;
   vk_pipeline_rendering_create_info_.colorAttachmentCount = 0;
   vk_pipeline_rendering_create_info_.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
