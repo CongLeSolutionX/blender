@@ -1,2 +1,3 @@
 Referenced by issue #123012, Cycles: Improve the coverage of automated regression tests
 Referenced by pull request #130894, Tests: Add Cycles tests for new volumetric scatter phase functions
+Referenced by commit 31bfcff4ea631871fd4acd47fffa1867ddc9566d, Tests: Add Cycles tests for new volumetric scatter phase functions
