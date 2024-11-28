@@ -488,32 +488,30 @@ void curve_populate_trans_data_structs(
     IndexMask points_to_transform = points_to_transform_per_attr[selection_i];
     VArray<bool> selection = selection_attrs[selection_i];
 
-    threading::parallel_for(points_to_transform.index_range(), 1024, [&](const IndexRange range) {
-      for (const int tranform_point_i : range) {
-        const int point_in_domain_i = points_to_transform[tranform_point_i];
-        TransData &td = tc_data[tranform_point_i];
-        float3 *elem = &positions[tranform_point_i];
+    points_to_transform.foreach_index(
+        GrainSize(512), [&](const int64_t point_in_domain_i, const int64_t transform_point_i) {
+          TransData &td = tc_data[transform_point_i];
+          float3 *elem = &positions[transform_point_i];
 
-        copy_v3_v3(td.iloc, *elem);
-        copy_v3_v3(td.center, td.iloc);
-        td.loc = *elem;
+          copy_v3_v3(td.iloc, *elem);
+          copy_v3_v3(td.center, td.iloc);
+          td.loc = *elem;
 
-        td.flag = 0;
-        if (selection[point_in_domain_i]) {
-          td.flag = TD_SELECTED;
-        }
+          td.flag = 0;
+          if (selection[point_in_domain_i]) {
+            td.flag = TD_SELECTED;
+          }
 
-        if (value_attribute) {
-          float *value = &((*value_attribute)[point_in_domain_i]);
-          td.val = value;
-          td.ival = *value;
-        }
-        td.ext = nullptr;
+          if (value_attribute) {
+            float *value = &((*value_attribute)[point_in_domain_i]);
+            td.val = value;
+            td.ival = *value;
+          }
+          td.ext = nullptr;
 
-        copy_m3_m3(td.smtx, smtx);
-        copy_m3_m3(td.mtx, mtx);
-      }
-    });
+          copy_m3_m3(td.smtx, smtx);
+          copy_m3_m3(td.mtx, mtx);
+        });
   }
   if (use_connected_only) {
     const VArray<int8_t> curve_types = curves.curve_types();
