@@ -549,20 +549,22 @@ void select_linked(bke::CurvesGeometry &curves, const IndexMask &curves_mask)
       curves, bke::AttrDomain::Point);
 
   curves_mask.foreach_index(GrainSize(256), [&](const int64_t curve) {
-    for (const int i : selection_writers.index_range()) {
+    const IndexRange curve_writers = curve_types[curve] == CURVE_TYPE_BEZIER ?
+                                         selection_writers.index_range() :
+                                         IndexRange(1);
+    const IndexRange points = points_by_curve[curve];
+
+    for (const int i : curve_writers) {
       bke::GSpanAttributeWriter &selection = selection_writers[i];
-      GMutableSpan selection_curve = selection.span.slice(points_by_curve[curve]);
+      GMutableSpan selection_curve = selection.span.slice(points);
       if (has_anything_selected(selection_curve)) {
         fill_selection_true(selection_curve);
-        for (const int j : selection_writers.index_range()) {
+        for (const int j : curve_writers) {
           if (j == i) {
             continue;
           }
-          fill_selection_true(selection_writers[j].span.slice(points_by_curve[curve]));
+          fill_selection_true(selection_writers[j].span.slice(points));
         }
-        return;
-      }
-      if (curve_types[curve] != CURVE_TYPE_BEZIER) {
         return;
       }
     }
