@@ -141,6 +141,10 @@ void VKRenderGraph::debug_print(NodeHandle node_handle) const
 
 std::string VKRenderGraph::full_debug_group(NodeHandle node_handle) const
 {
+  if ((G.debug & G_DEBUG_GPU) == 0) {
+    return std::string();
+  }
+
   DebugGroupID debug_group = debug_.node_group_map[node_handle];
   if (debug_group == -1) {
     return std::string();
