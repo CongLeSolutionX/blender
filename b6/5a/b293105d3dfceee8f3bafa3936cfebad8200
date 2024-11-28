@@ -1,1 +1,2 @@
 Referenced by issue #99294, Voxel Remesher text is resized based on object scale
+Referenced by pull request #131093, Fix: Sculpt Edit Voxel Size text too big (applies UI scale twice)
