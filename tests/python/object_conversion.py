@@ -112,14 +112,14 @@ def main():
     ]
 
     type_tests = [
-        ConversionPair('Curve 1', 'Cube', 'CURVE', 'MESH'),
-        ConversionPair('Curve 2', 'CubeWithEdges', 'CURVE', 'CURVE'),
-        ConversionPair('Curve 3', 'Plane', 'CURVE', 'CURVE'),
-        ConversionPair('Curve 4', 'HollowPlane', 'CURVE', 'CURVE'),
-        ConversionPair('Curve 5', 'Suzanne', 'CURVE', 'GREASEPENCIL'),
-        ConversionPair('Curve 6', 'BezierCircle', 'CURVE', 'CURVE'),
-        ConversionPair('Curve 7', 'BezierCurve', 'CURVE', 'CURVE'),
-        ConversionPair('Curve 8', 'Text', 'CURVE', 'CURVE'),
+        ConversionPair('Legacy Curves 1', 'Cube', 'CURVE', 'MESH'),
+        ConversionPair('Legacy Curves 2', 'CubeWithEdges', 'CURVE', 'CURVE'),
+        ConversionPair('Legacy Curves 3', 'Plane', 'CURVE', 'CURVE'),
+        ConversionPair('Legacy Curves 4', 'HollowPlane', 'CURVE', 'CURVE'),
+        ConversionPair('Legacy Curves 5', 'Suzanne', 'CURVE', 'GREASEPENCIL'),
+        ConversionPair('Legacy Curves 6', 'BezierCircle', 'CURVE', 'CURVE'),
+        ConversionPair('Legacy Curves 7', 'BezierCurve', 'CURVE', 'CURVE'),
+        ConversionPair('Legacy Curves 8', 'Text', 'CURVE', 'CURVE'),
         ConversionPair('Curves 1', 'Cube', 'CURVES', 'MESH'),
         ConversionPair('Curves 2', 'CubeWithEdges', 'CURVES', 'MESH'),
         ConversionPair('Curves 3', 'Plane', 'CURVES', 'MESH'),
