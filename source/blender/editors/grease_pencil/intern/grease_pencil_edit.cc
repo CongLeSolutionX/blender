@@ -318,7 +318,7 @@ static int grease_pencil_stroke_simplify_exec(bContext *C, wmOperator *op)
         break;
       }
       case SimplifyMode::MERGE: {
-        const OffsetIndices points_by_curve = curves.points_by_curve();
+        const OffsetIndices<int> points_by_curve = curves.points_by_curve();
         const Array<int> point_to_curve_map = curves.point_to_curve_map();
         const float merge_distance = RNA_float_get(op->ptr, "distance");
         const IndexMask points = IndexMask::from_predicate(
