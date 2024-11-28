@@ -157,7 +157,7 @@ VKBuffer &VKImmediate::ensure_space(VkDeviceSize bytes_needed, VkDeviceSize offs
     return *active_buffers_.last();
   }
 
-  /* NOTE: offset alignment isn't needed as it is managed by VMA. */
+  /* Offset alignment isn't needed when creating buffers as it is managed by VMA. */
   VkDeviceSize alloc_size = new_buffer_size(bytes_needed);
   CLOG_INFO(&LOG, 2, "Allocate buffer (size=%d)", int(alloc_size));
   buffer_offset_ = 0;
