@@ -550,7 +550,7 @@ static std::unique_ptr<uiTooltipData> ui_tooltip_data_from_tool(bContext *C,
                                 {},
                                 UI_TIP_STYLE_NORMAL,
                                 (is_error) ? UI_TIP_LC_ALERT : UI_TIP_LC_MAIN,
-                                true);
+                                false);
       MEM_freeN(expr_result);
     }
   }
@@ -1134,7 +1134,7 @@ static std::unique_ptr<uiTooltipData> ui_tooltip_data_from_button_or_extra_icon(
     UI_tooltip_text_field_add(*data, rgba_st, {}, UI_TIP_STYLE_MONO, UI_TIP_LC_NORMAL, false);
     UI_tooltip_text_field_add(*data, hsva_st, {}, UI_TIP_STYLE_MONO, UI_TIP_LC_NORMAL, false);
 
-    /* Tooltip now owns a copy of the ImBuf, so we can delete ours.*/
+    /* Tooltip now owns a copy of the ImBuf, so we can delete ours. */
     IMB_freeImBuf(image_data.ibuf);
   }
 
@@ -1712,7 +1712,7 @@ static void ui_tooltip_from_clip(MovieClip &clip, uiTooltipData &data)
 static void ui_tooltip_from_vfont(const VFont &font, uiTooltipData &data)
 {
   if (!font.filepath[0]) {
-    /* Let's not bother with packed files _for now_.*/
+    /* Let's not bother with packed files _for now_. */
     return;
   }
 
