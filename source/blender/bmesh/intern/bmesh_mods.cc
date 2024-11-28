@@ -317,6 +317,22 @@ BMFace *BM_face_split_n(BMesh *bm,
   return f_new;
 }
 
+BMEdge *BM_insert_edge(BMesh *bm, 
+                       BMLoop *l_1, 
+                       BMLoop *l_2, 
+                       BMLoop **r_l)
+{
+  /* Co-facial insert edge*/
+  if(l_1->f == l_2->f){
+    BM_face_split(bm, l_1->f, l_1, l_2, r_l, nullptr, true);
+    return (*r_l)->e;
+  } else {/* Non Co-facial insert edge*/
+
+  }
+
+  return nullptr;
+}
+
 BMEdge *BM_vert_collapse_faces(BMesh *bm,
                                BMEdge *e_kill,
                                BMVert *v_kill,

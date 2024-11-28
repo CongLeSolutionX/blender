@@ -79,6 +79,22 @@ BMFace *BM_face_split(
     BMesh *bm, BMFace *f, BMLoop *l_a, BMLoop *l_b, BMLoop **r_l, BMEdge *example, bool no_double);
 
 /**
+ * \brief Insert Edge
+ *
+ * Insert an edge give two corners (denoted by two face + two vertex). 
+ * returns the newly made edge, and sets the 
+ * \a r_l member to a loop in the newly created edge.
+ *
+ * \param bm: The bmesh
+ * \param l_1, l_2: Loops of the corners for the edge to be inserted
+ * \param r_l: pointer which will receive the BMLoop for inserted split edge
+ *
+ * \return Pointer to the newly created edge representing newly inserted edge
+ */
+BMEdge *BM_insert_edge(
+    BMesh *bm, BMLoop *l_1, BMLoop *l_2, BMLoop **r_l);
+
+/**
  * \brief Face Split with intermediate points
  *
  * Like BM_face_split, but with an edge split by \a n intermediate points with given coordinates.
