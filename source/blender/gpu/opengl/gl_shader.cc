@@ -597,22 +597,55 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
   for (const ShaderCreateInfo::Resource &res : info.geometry_resources_) {
     print_resource_alias(ss, res);
   }
+
   ss << "\n/* Push Constants. */\n";
-  for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
-    ss << "uniform " << to_string(uniform.type) << " " << uniform.name;
-    if (uniform.array_size > 0) {
-      ss << "[" << uniform.array_size << "]";
+
+  enum Stages {
+    COMP = 1 << 1,
+    VERT = 1 << 2,
+    GEOM = 1 << 3,
+    FRAG = 1 << 4,
+  };
+  int stages = 0;
+  int stages_count = 0;
+
+  auto check_stage = [&](StringRefNull src, Stages stage) {
+    if (!src.is_empty()) {
+      stages |= stage;
+      stages_count++;
     }
-    ss << ";\n";
-  }
-#if 0 /* #95278: This is not be enough to prevent some compilers think it is recursive. */
-  for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
-    /* #95278: Double macro to avoid some compilers think it is recursive. */
-    ss << "#define " << uniform.name << "_ " << uniform.name << "\n";
-    ss << "#define " << uniform.name << " (" << uniform.name << "_)\n";
-  }
-#endif
-  ss << "\n";
+  };
+
+  check_stage(info.compute_source_, COMP);
+  check_stage(info.vertex_source_, VERT);
+  check_stage(info.geometry_source_, GEOM);
+  check_stage(info.fragment_source_, FRAG);
+
+  auto declare_stage = [&](Stages stage, int stage_index, const char *define) {
+    if (!(stage & stages)) {
+      return;
+    }
+    int location = 0;
+    ss << "#ifdef " << define << "\n";
+    for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
+      int size = std::max(1, uniform.array_size);
+      int loc = location * stages_count + stage_index * size;
+      ss << "layout (location = " << loc << ") ";
+      ss << "uniform " << to_string(uniform.type) << " " << uniform.name;
+      if (uniform.array_size > 0) {
+        ss << "[" << uniform.array_size << "]";
+      }
+      ss << ";\n";
+      location += size;
+    }
+    ss << "#endif //" << define << "\n\n";
+  };
+
+  declare_stage(COMP, 0, "GPU_COMPUTE_SHADER");
+  declare_stage(VERT, 0, "GPU_VERTEX_SHADER");
+  declare_stage(FRAG, 1, "GPU_FRAGMENT_SHADER");
+  declare_stage(GEOM, 2, "GPU_GEOMETRY_SHADER");
+
   return ss.str();
 }
 
