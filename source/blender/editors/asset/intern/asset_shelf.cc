@@ -853,6 +853,7 @@ static void asset_shelf_header_draw(const bContext *C, Header *header)
 
   uiItemSpacer(layout);
 
+  uiItemO(layout, "", ICON_ADD, "POSELIB_OT_asset_create");
   uiItemPopoverPanel(layout, C, "ASSETSHELF_PT_display", "", ICON_IMGDISPLAY);
   uiLayout *sub = uiLayoutRow(layout, false);
   /* Same as file/asset browser header. */

@@ -269,6 +269,7 @@ static int pose_asset_create_exec(bContext *C, wmOperator *op)
 
   BKE_id_free(bmain, &pose_action.id);
 
+  // TODO uncomment this once it no longer triggers an assert.
   // refresh_asset_library(C, user_library_to_library_ref(*user_library));
 
   WM_main_add_notifier(NC_ASSET | ND_ASSET_LIST | NA_ADDED, nullptr);
@@ -406,6 +407,7 @@ static int pose_asset_overwrite_exec(bContext *C, wmOperator *op)
 
   update_pose_action_from_scene(bmain, action->wrap(), *pose_object);
 
+  asset::generate_preview(C, &action->id);
   bke::asset_edit_id_save(*bmain, action->id, *op->reports);
 
   WM_main_add_notifier(NC_ASSET | ND_ASSET_LIST | NA_EDITED, nullptr);
