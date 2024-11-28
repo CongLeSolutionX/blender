@@ -1,1 +1,2 @@
 Referenced by issue #75895, LLVM ERROR: Error while trying to spill SGPR4_SGPR5 from class SReg_64: Cannot scavenge register without an emergency spill slot!
+Referenced by pull request #131100, Cleanup: remove unused `ccl_loop_no_unroll`
