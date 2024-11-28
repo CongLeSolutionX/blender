@@ -552,7 +552,7 @@ void select_linked(bke::CurvesGeometry &curves, const IndexMask &curves_mask)
     /* For Bezier curves check all three selection layers  ".selection", ".selection_handle_left",
      * ".selection_handle_right". For other curves only ".selection". */
     const IndexRange curve_writers = curve_types[curve] == CURVE_TYPE_BEZIER ?
-                                         selection_writers.index_range() :
+                                         get_curves_all_selection_attribute_names().index_range() :
                                          IndexRange(1);
     const IndexRange points = points_by_curve[curve];
 
