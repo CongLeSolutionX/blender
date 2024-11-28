@@ -307,7 +307,7 @@ static void keymap_update_brushes(
     wmKeyMap *keymap,
     const blender::StringRef asset_prefix,
     const blender::StringRef tool_property,
-    const blender::Map<blender::StringRef, blender::StringRef> &tool_tool_map,
+    const blender::Map<blender::StringRef, blender::StringRefNull> &tool_tool_map,
     const blender::Map<blender::StringRef, blender::StringRef> &tool_asset_map,
     const blender::Map<int, blender::StringRef> &id_asset_map)
 {
@@ -318,12 +318,12 @@ static void keymap_update_brushes(
     }
 
     std::optional<blender::StringRef> asset_id = {};
-    std::optional<blender::StringRef> tool_id = {};
+    std::optional<blender::StringRefNull> tool_id = {};
     if (STREQ(kmi->idname, "WM_OT_tool_set_by_id")) {
       IDProperty *idprop = IDP_GetPropertyFromGroup(kmi->properties, "name");
       if (idprop && (idprop->type == IDP_STRING)) {
         const blender::StringRef prop_val = IDP_String(idprop);
-        if (prop_val.startswith("builtin_brush.")) {
+        if (!prop_val.startswith("builtin_brush.")) {
           continue;
         }
         if (tool_asset_map.contains(prop_val)) {
@@ -404,7 +404,7 @@ static void keymap_update_mesh_sculpt_brushes(wmKeyMap *keymap)
   }();
 
   const auto tool_tool_map = []() {
-    blender::Map<blender::StringRef, blender::StringRef> map;
+    blender::Map<blender::StringRef, blender::StringRefNull> map;
     map.add_new("builtin_brush.Draw", "builtin.brush");
     map.add_new("builtin_brush.Paint", "builtin_brush.paint");
     map.add_new("builtin_brush.Mask", "builtin_brush.mask");
@@ -460,7 +460,7 @@ static void keymap_update_mesh_vertex_paint_brushes(wmKeyMap *keymap)
   constexpr blender::StringRef tool_property = "vertex_tool";
 
   const auto tool_tool_map = []() {
-    blender::Map<blender::StringRef, blender::StringRef> map;
+    blender::Map<blender::StringRef, blender::StringRefNull> map;
     map.add_new("builtin_brush.Draw", "builtin.brush");
     map.add_new("builtin_brush.Blur", "builtin_brush.blur");
     map.add_new("builtin_brush.Average", "builtin_brush.average");
@@ -487,7 +487,7 @@ static void keymap_update_mesh_weight_paint_brushes(wmKeyMap *keymap)
   constexpr blender::StringRef tool_property = "weight_tool";
 
   const auto tool_tool_map = []() {
-    blender::Map<blender::StringRef, blender::StringRef> map;
+    blender::Map<blender::StringRef, blender::StringRefNull> map;
     map.add_new("builtin_brush.Draw", "builtin.brush");
     map.add_new("builtin_brush.Blur", "builtin_brush.blur");
     map.add_new("builtin_brush.Average", "builtin_brush.average");
@@ -514,7 +514,7 @@ static void keymap_update_mesh_texture_paint_brushes(wmKeyMap *keymap)
   constexpr blender::StringRef tool_property = "image_tool";
 
   const auto tool_tool_map = []() {
-    blender::Map<blender::StringRef, blender::StringRef> map;
+    blender::Map<blender::StringRef, blender::StringRefNull> map;
     map.add_new("builtin_brush.Draw", "builtin.brush");
     map.add_new("builtin_brush.Soften", "builtin_brush.soften");
     map.add_new("builtin_brush.Smear", "builtin_brush.smear");
