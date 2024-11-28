@@ -309,7 +309,8 @@ static void createTransCurvesVerts(bContext * /*C*/, TransInfo *t)
       value_attribute = attribute_writer.span;
     }
 
-    curve_populate_trans_data_structs(tc,
+    curve_populate_trans_data_structs(*t,
+                                      tc,
                                       curves,
                                       object->object_to_world(),
                                       value_attribute,
@@ -440,6 +441,7 @@ void copy_positions_from_curves_transform_custom_data(
 }
 
 void curve_populate_trans_data_structs(
+    const TransInfo &t,
     TransDataContainer &tc,
     blender::bke::CurvesGeometry &curves,
     const blender::float4x4 &transform,
@@ -452,6 +454,9 @@ void curve_populate_trans_data_structs(
   using namespace blender;
   const std::array<Span<float3>, 3> src_positions_per_selection_attr = {
       curves.positions(), curves.handle_positions_left(), curves.handle_positions_right()};
+  const View3D *v3d = static_cast<const View3D *>(t.view);
+  const bool hide_handles = (v3d != nullptr) ? (v3d->overlay.handle_display == CURVE_HANDLE_NONE) :
+                                               false;
   std::array<MutableSpan<float3>, 3> positions_per_selection_attr;
 
   for (const int selection_i : points_to_transform_per_attr.index_range()) {
@@ -494,7 +499,11 @@ void curve_populate_trans_data_structs(
           float3 *elem = &positions[transform_point_i];
 
           copy_v3_v3(td.iloc, *elem);
-          copy_v3_v3(td.center, td.iloc);
+          copy_v3_v3(td.center,
+                     hide_handles || (t.around == V3D_AROUND_LOCAL_ORIGINS) ||
+                             selection_attrs[0][point_in_domain_i] ?
+                         curves.positions()[point_in_domain_i] :
+                         td.iloc);
           td.loc = *elem;
 
           td.flag = 0;

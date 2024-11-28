@@ -205,7 +205,8 @@ static void createTransGreasePencilVerts(bContext *C, TransInfo *t)
                                              ed::greasepencil::retrieve_editable_strokes(
                                                  *object, info.drawing, info.layer_index, memory) :
                                              IndexMask();
-      curve_populate_trans_data_structs(tc,
+      curve_populate_trans_data_structs(*t,
+                                        tc,
                                         curves,
                                         layer_space_to_world_space,
                                         value_attribute,
