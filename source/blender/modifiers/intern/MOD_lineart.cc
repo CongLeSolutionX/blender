@@ -808,11 +808,11 @@ static void generate_strokes(ModifierData &md,
 
   const float4x4 &mat = ctx.object->world_to_object();
 
-  /* `drawing` can be nullptr if target layer is locked, in which case no strokes are generated. We
-   * still allow cache operations to run at the end of this function because there might be other
-   * line art modifiers in the same stack. */
+  /* `drawing` can be nullptr if current frame is before any of the key frames, in which case no
+   * strokes are generated. We still allow cache operations to run at the end of this function
+   * because there might be other line art modifiers in the same stack. */
   Drawing *drawing = [&]() -> Drawing * {
-    if (Drawing *drawing = grease_pencil.get_editable_drawing_at(layer, current_frame)) {
+    if (Drawing *drawing = grease_pencil.get_drawing_at(layer, current_frame)) {
       return drawing;
     }
     return grease_pencil.insert_frame(layer, current_frame);
