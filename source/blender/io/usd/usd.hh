@@ -168,6 +168,8 @@ struct USDExportParams {
   char collection[MAX_IDPROP_NAME] = "";
   char custom_properties_namespace[MAX_IDPROP_NAME] = "";
 
+  bool merge_parent_xform = false;
+
   /** Communication structure between the wmJob management code and the worker code. Currently used
    * to generate safely reports from the worker thread. */
   wmJobWorkerStatus *worker_status = nullptr;
@@ -212,6 +214,7 @@ struct USDImportParams {
   bool set_material_blend;
 
   bool validate_meshes;
+  bool merge_parent_xform;
 
   eUSDMtlPurpose mtl_purpose;
   eUSDMtlNameCollisionMode mtl_name_collision_mode;

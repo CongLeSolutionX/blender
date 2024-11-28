@@ -190,6 +190,10 @@ class Preprocessor {
         /* Skip GLSL-C++ stubs. They are only for IDE linting. */
         return;
       }
+      if (dependency_name.find("info.hh") != std::string::npos) {
+        /* Skip info files. They are only for IDE linting. */
+        return;
+      }
       dependencies_.emplace_back(dependency_name);
     });
   }
@@ -482,7 +486,7 @@ class Preprocessor {
 
   /* Assume formatted source with our code style. Cannot be applied to python shaders. */
   template<typename ReportErrorF>
-  void global_scope_constant_linting(std::string str, const ReportErrorF &report_error)
+  void global_scope_constant_linting(const std::string &str, const ReportErrorF &report_error)
   {
     /* Example: `const uint global_var = 1u;`. Matches if not indented (i.e. inside a scope). */
     std::regex regex(R"(const \w+ \w+ =)");

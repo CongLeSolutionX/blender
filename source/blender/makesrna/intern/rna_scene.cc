@@ -68,6 +68,8 @@
 
 #include "BLI_threads.h"
 
+#include "ANIM_keyingsets.hh"
+
 #include "DEG_depsgraph.hh"
 
 #ifdef WITH_OPENEXR
@@ -203,18 +205,6 @@ static const EnumPropertyItem rna_enum_snap_element_base_items[] = {
 static const EnumPropertyItem *rna_enum_snap_element_individual_items =
     &rna_enum_snap_element_items[ARRAY_SIZE(rna_enum_snap_element_items) - 3];
 #endif
-
-const EnumPropertyItem rna_enum_snap_node_element_items[] = {
-    {SCE_SNAP_TO_GRID, "GRID", ICON_SNAP_GRID, "Grid", "Snap to grid"},
-    {SCE_SNAP_TO_NODE_X, "NODE_X", ICON_NODE_SIDE, "Node X", "Snap to left/right node border"},
-    {SCE_SNAP_TO_NODE_Y, "NODE_Y", ICON_NODE_TOP, "Node Y", "Snap to top/bottom node border"},
-    {SCE_SNAP_TO_NODE_X | SCE_SNAP_TO_NODE_Y,
-     "NODE_XY",
-     ICON_NODE_CORNER,
-     "Node X / Y",
-     "Snap to any node border"},
-    {0, nullptr, 0, nullptr, nullptr},
-};
 
 const EnumPropertyItem rna_enum_snap_animation_element_items[] = {
     {SCE_SNAP_TO_FRAME, "FRAME", 0, "Frame", "Snap to frame"},
@@ -748,8 +738,8 @@ static const EnumPropertyItem eevee_resolution_scale_items[] = {
 #  include "BKE_global.hh"
 #  include "BKE_gpencil_legacy.h"
 #  include "BKE_idprop.hh"
-#  include "BKE_image.h"
-#  include "BKE_image_format.h"
+#  include "BKE_image.hh"
+#  include "BKE_image_format.hh"
 #  include "BKE_layer.hh"
 #  include "BKE_main.hh"
 #  include "BKE_mesh.hh"
@@ -1111,7 +1101,8 @@ static void rna_Scene_frame_update(Main * /*bmain*/, Scene * /*current_scene*/, 
 static PointerRNA rna_Scene_active_keying_set_get(PointerRNA *ptr)
 {
   Scene *scene = (Scene *)ptr->data;
-  return rna_pointer_inherit_refine(ptr, &RNA_KeyingSet, ANIM_scene_get_active_keyingset(scene));
+  return rna_pointer_inherit_refine(
+      ptr, &RNA_KeyingSet, blender::animrig::scene_get_active_keyingset(scene));
 }
 
 static void rna_Scene_active_keying_set_set(PointerRNA *ptr,
@@ -1143,7 +1134,7 @@ static void rna_Scene_active_keying_set_index_set(PointerRNA *ptr, int value)
   scene->active_keyingset = value + 1;
 }
 
-/* XXX: evil... builtin_keyingsets is defined in `keyingsets.cc`! */
+/* XXX: evil... builtin_keyingsets is defined in `blender::animrig::keyingsets.cc`! */
 /* TODO: make API function to retrieve this... */
 extern ListBase builtin_keyingsets;
 
@@ -3641,14 +3632,6 @@ static void rna_def_tool_settings(BlenderRNA *brna)
       prop,
       "Snap to Same Target",
       "Snap only to target that source was initially near (\"Face Nearest\" only)");
-
-  /* node editor uses its own set of snap modes */
-  prop = RNA_def_property(srna, "snap_node_element", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_bitflag_sdna(prop, nullptr, "snap_node_mode");
-  RNA_def_property_flag(prop, PROP_DEG_SYNC_ONLY);
-  RNA_def_property_enum_items(prop, rna_enum_snap_node_element_items);
-  RNA_def_property_ui_text(prop, "Snap Node Element", "Type of element to snap to");
-  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr); /* header redraw */
 
   prop = RNA_def_property(srna, "use_snap_anim", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "snap_flag_anim", SCE_SNAP);

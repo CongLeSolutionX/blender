@@ -486,7 +486,7 @@ void gpu_shader_create_info_init()
   }
 
   if (GPU_stencil_clasify_buffer_workaround()) {
-    /* WORKAROUND: Adding a dummy buffer that isn't used fixes a bug inside the Qualcom driver. */
+    /* WORKAROUND: Adding a dummy buffer that isn't used fixes a bug inside the Qualcomm driver. */
     eevee_deferred_tile_classify.storage_buf(
         12, Qualifier::READ_WRITE, "uint", "dummy_workaround_buf[]");
   }
@@ -494,13 +494,6 @@ void gpu_shader_create_info_init()
 #ifdef WITH_METAL_BACKEND
   /* Metal-specific alternatives for Geometry shaders. */
   if (GPU_type_matches_ex(GPU_DEVICE_ANY, GPU_OS_MAC, GPU_DRIVER_ANY, GPU_BACKEND_METAL)) {
-    /* 3D polyline. */
-    gpu_shader_3D_polyline_uniform_color = gpu_shader_3D_polyline_uniform_color_no_geom;
-    gpu_shader_3D_polyline_flat_color = gpu_shader_3D_polyline_flat_color_no_geom;
-    gpu_shader_3D_polyline_smooth_color = gpu_shader_3D_polyline_smooth_color_no_geom;
-    gpu_shader_3D_polyline_uniform_color_clipped =
-        gpu_shader_3D_polyline_uniform_color_clipped_no_geom;
-
     /* Overlay Edit Mesh. */
     overlay_edit_mesh_edge = overlay_edit_mesh_edge_no_geom;
     overlay_edit_mesh_edge_flat = overlay_edit_mesh_edge_flat_no_geom;
@@ -556,8 +549,9 @@ void gpu_shader_create_info_init()
     info->builtins_ |= gpu_shader_dependency_get_builtins(info->compute_source_);
 
 #if GPU_SHADER_PRINTF_ENABLE
+    const bool is_material_shader = info->name_.startswith("eevee_surf_");
     if ((info->builtins_ & BuiltinBits::USE_PRINTF) == BuiltinBits::USE_PRINTF ||
-        gpu_shader_dependency_force_gpu_print_injection())
+        (gpu_shader_dependency_force_gpu_print_injection() && is_material_shader))
     {
       info->additional_info("gpu_print");
     }

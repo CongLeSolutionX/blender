@@ -17,6 +17,7 @@
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/cpu.h>
+#include <libavutil/display.h>
 #include <libswscale/swscale.h>
 
 /* Check if our ffmpeg is new enough, avoids user complaints.
@@ -38,6 +39,13 @@
 #  define FFMPEG_INLINE static __inline
 #else
 #  define FFMPEG_INLINE static inline
+#endif
+
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 29, 100)
+/* In ffmpeg 6.1 usage of the "key_frame" variable from "AVFrame" has been deprecated.
+ * used the new method to query for the "AV_FRAME_FLAG_KEY" flag instead.
+ */
+#  define FFMPEG_OLD_KEY_FRAME_QUERY_METHOD
 #endif
 
 #if (LIBAVFORMAT_VERSION_MAJOR < 59)
@@ -159,6 +167,44 @@ FFMPEG_INLINE size_t ffmpeg_get_buffer_alignment()
     align = 64;
   }
   return align;
+}
+
+FFMPEG_INLINE void ffmpeg_copy_display_matrix(const AVStream *src, AVStream *dst)
+{
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(60, 29, 100)
+  const AVPacketSideData *src_matrix = av_packet_side_data_get(src->codecpar->coded_side_data,
+                                                               src->codecpar->nb_coded_side_data,
+                                                               AV_PKT_DATA_DISPLAYMATRIX);
+  if (src_matrix != nullptr) {
+    uint8_t *dst_matrix = (uint8_t *)av_memdup(src_matrix->data, src_matrix->size);
+    av_packet_side_data_add(&dst->codecpar->coded_side_data,
+                            &dst->codecpar->nb_coded_side_data,
+                            AV_PKT_DATA_DISPLAYMATRIX,
+                            dst_matrix,
+                            src_matrix->size,
+                            0);
+  }
+#endif
+}
+
+FFMPEG_INLINE int ffmpeg_get_video_rotation(const AVStream *stream)
+{
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(60, 29, 100)
+  const AVPacketSideData *src_matrix = av_packet_side_data_get(
+      stream->codecpar->coded_side_data,
+      stream->codecpar->nb_coded_side_data,
+      AV_PKT_DATA_DISPLAYMATRIX);
+  if (src_matrix != nullptr) {
+    /* ffmpeg reports rotation in [-180..+180] range; our image rotation
+     * uses different direction and [0..360] range. */
+    double theta = -av_display_rotation_get((const int32_t *)src_matrix->data);
+    if (theta < 0.0) {
+      theta += 360.0;
+    }
+    return int(theta);
+  }
+#endif
+  return 0;
 }
 
 /* -------------------------------------------------------------------- */

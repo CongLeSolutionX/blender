@@ -15,10 +15,11 @@ set(SRC
   opensubdiv_converter_capi.hh
   opensubdiv_evaluator_capi.hh
   opensubdiv_evaluator.hh
-  opensubdiv_topology_refiner_capi.hh
+  opensubdiv_topology_refiner.hh
 )
 
 set(LIB
+  PRIVATE bf::blenlib
   PRIVATE bf::intern::guardedalloc
 )
 
@@ -67,7 +68,6 @@ if(WITH_OPENSUBDIV)
     internal/topology/topology_refiner_factory.cc
     internal/topology/topology_refiner_impl.cc
     internal/topology/topology_refiner_impl_compare.cc
-    internal/topology/topology_refiner_impl.h
   )
 
   list(APPEND LIB

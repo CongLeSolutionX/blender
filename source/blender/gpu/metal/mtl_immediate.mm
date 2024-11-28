@@ -201,11 +201,9 @@ void MTLImmediate::end()
          *   and will generate an appropriate conversion function when reading the vertex attribute
          *   value into local shader storage.
          *   (If no explicit conversion is needed, the function specialize to a pass-through). */
-        MTLVertexFormat converted_format;
-        bool can_convert = mtl_vertex_format_resize(
-            mtl_shader_attribute.format, attr->comp_len, &converted_format);
-        desc.vertex_descriptor.attributes[i].format = (can_convert) ? converted_format :
-                                                                      mtl_shader_attribute.format;
+        MTLVertexFormat converted_format = format_resize_comp(mtl_shader_attribute.format,
+                                                              attr->comp_len);
+        desc.vertex_descriptor.attributes[i].format = converted_format;
         desc.vertex_descriptor.attributes[i].format_conversion_mode = (GPUVertFetchMode)
                                                                           attr->fetch_mode;
         BLI_assert(desc.vertex_descriptor.attributes[i].format != MTLVertexFormatInvalid);
@@ -270,7 +268,14 @@ void MTLImmediate::end()
                                 (const int *)(&this->vertex_idx));
     }
 
+    if (unwrap(this->shader)->is_polyline) {
+      context_->get_scratchbuffer_manager().bind_as_ssbo(GPU_SSBO_POLYLINE_POS_BUF_SLOT);
+      context_->get_scratchbuffer_manager().bind_as_ssbo(GPU_SSBO_POLYLINE_COL_BUF_SLOT);
+      context_->get_scratchbuffer_manager().bind_as_ssbo(GPU_SSBO_INDEX_BUF_SLOT);
+    }
+
     MTLPrimitiveType mtl_prim_type = gpu_prim_type_to_metal(this->prim_type);
+
     if (context_->ensure_render_pipeline_state(mtl_prim_type)) {
 
       /* Issue draw call. */
@@ -366,7 +371,10 @@ void MTLImmediate::end()
         /* Set depth stencil state (requires knowledge of primitive type). */
         context_->ensure_depth_stencil_state(primitive_type);
 
-        if (active_mtl_shader->get_uses_ssbo_vertex_fetch()) {
+        if (unwrap(this->shader)->is_polyline) {
+          this->polyline_draw_workaround(current_allocation_.buffer_offset);
+        }
+        else if (active_mtl_shader->get_uses_ssbo_vertex_fetch()) {
 
           /* Bind Null Buffers for empty/missing bind slots. */
           id<MTLBuffer> null_buffer = context_->get_null_buffer();
@@ -413,6 +421,17 @@ void MTLImmediate::end()
     }
     if (G.debug & G_DEBUG_GPU) {
       [rec popDebugGroup];
+    }
+
+    if (unwrap(this->shader)->is_polyline) {
+      context_->get_scratchbuffer_manager().unbind_as_ssbo();
+
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_POLYLINE_POS_BUF_SLOT].ssbo = nil;
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_POLYLINE_COL_BUF_SLOT].ssbo = nil;
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_INDEX_BUF_SLOT].ssbo = nil;
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_POLYLINE_POS_BUF_SLOT].bound = false;
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_POLYLINE_COL_BUF_SLOT].bound = false;
+      context_->pipeline_state.ssbo_bindings[GPU_SSBO_INDEX_BUF_SLOT].bound = false;
     }
   }
 

@@ -46,7 +46,7 @@ static std::optional<std::string> cache_dir_get()
   static std::optional<std::string> result;
   if (!result.has_value()) {
     static char tmp_dir_buffer[FILE_MAX];
-    /* Shader builder doesn't return the correct appdir*/
+    /* Shader builder doesn't return the correct appdir. */
     if (!BKE_appdir_folder_caches(tmp_dir_buffer, sizeof(tmp_dir_buffer))) {
       return std::nullopt;
     }
@@ -80,7 +80,7 @@ static bool read_spirv_from_disk(VKShaderModule &shader_module)
   BLI_file_touch(spirv_path.c_str());
   BLI_file_touch(sidecar_path.c_str());
 
-  /* Read sidecar*/
+  /* Read sidecar. */
   fstream sidecar_file(sidecar_path, std::ios::binary | std::ios::in | std::ios::ate);
   std::streamsize sidecar_size_on_disk = sidecar_file.tellg();
   SPIRVSidecar sidecar = {};
@@ -90,7 +90,7 @@ static bool read_spirv_from_disk(VKShaderModule &shader_module)
   sidecar_file.seekg(0, std::ios::beg);
   sidecar_file.read(reinterpret_cast<char *>(&sidecar), sizeof(sidecar));
 
-  /* Read spirv binary */
+  /* Read spirv binary. */
   fstream spirv_file(spirv_path, std::ios::binary | std::ios::in | std::ios::ate);
   std::streamsize size = spirv_file.tellg();
   if (size != sidecar.spirv_size) {
@@ -172,23 +172,23 @@ BatchHandle VKShaderCompiler::batch_compile(Span<const shader::ShaderCreateInfo 
   return handle;
 }
 
-static const std::string to_stage_name(shaderc_shader_kind stage)
+static StringRef to_stage_name(shaderc_shader_kind stage)
 {
   switch (stage) {
     case shaderc_vertex_shader:
-      return std::string("vertex");
+      return "vertex";
     case shaderc_geometry_shader:
-      return std::string("geometry");
+      return "geometry";
     case shaderc_fragment_shader:
-      return std::string("fragment");
+      return "fragment";
     case shaderc_compute_shader:
-      return std::string("compute");
+      return "compute";
 
     default:
       BLI_assert_msg(false, "Do not know how to convert shaderc_shader_kind to stage name.");
       break;
   }
-  return std::string("unknown stage");
+  return "unknown stage";
 }
 
 static bool compile_ex(shaderc::Compiler &compiler,
@@ -213,7 +213,7 @@ static bool compile_ex(shaderc::Compiler &compiler,
     options.SetOptimizationLevel(shaderc_optimization_level_zero);
   }
 
-  std::string full_name = std::string(shader.name_get()) + "_" + to_stage_name(stage);
+  std::string full_name = shader.name_get() + "_" + to_stage_name(stage);
   shader_module.compilation_result = compiler.CompileGlslToSpv(
       shader_module.combined_sources, stage, full_name.c_str(), options);
   bool compilation_succeeded = shader_module.compilation_result.GetCompilationStatus() ==

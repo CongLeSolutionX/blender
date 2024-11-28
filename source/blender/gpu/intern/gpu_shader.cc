@@ -451,8 +451,8 @@ void GPU_shader_bind(GPUShader *gpu_shader)
     }
   }
 #if GPU_SHADER_PRINTF_ENABLE
-  if (ctx->printf_buf) {
-    GPU_storagebuf_bind(ctx->printf_buf, GPU_SHADER_PRINTF_SLOT);
+  if (!ctx->printf_buf.is_empty()) {
+    GPU_storagebuf_bind(ctx->printf_buf.last(), GPU_SHADER_PRINTF_SLOT);
   }
 #endif
 }
@@ -784,6 +784,12 @@ void GPU_shader_uniform_2iv(GPUShader *sh, const char *name, const int data[2])
 {
   const int loc = GPU_shader_get_uniform(sh, name);
   GPU_shader_uniform_int_ex(sh, loc, 2, 1, data);
+}
+
+void GPU_shader_uniform_3iv(GPUShader *sh, const char *name, const int data[3])
+{
+  const int loc = GPU_shader_get_uniform(sh, name);
+  GPU_shader_uniform_int_ex(sh, loc, 3, 1, data);
 }
 
 void GPU_shader_uniform_mat4(GPUShader *sh, const char *name, const float data[4][4])

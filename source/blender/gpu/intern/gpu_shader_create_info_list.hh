@@ -14,6 +14,7 @@
 #include "gpu_shader_2D_image_overlays_stereo_merge_info.hh"
 #include "gpu_shader_2D_image_rect_color_info.hh"
 #include "gpu_shader_2D_image_shuffle_color_info.hh"
+#include "gpu_shader_2D_node_socket_info.hh"
 #include "gpu_shader_2D_nodelink_info.hh"
 #include "gpu_shader_2D_point_uniform_size_uniform_color_aa_info.hh"
 #include "gpu_shader_2D_point_uniform_size_uniform_color_outline_aa_info.hh"
@@ -37,8 +38,10 @@
 #include "gpu_shader_text_info.hh"
 #include "gpu_srgb_to_framebuffer_space_info.hh"
 
-#ifdef WITH_GPU_DRAW_TESTS
-#  include "gpu_shader_test_info.hh"
+#ifdef WITH_GTEST
+#  ifdef WITH_GPU_DRAW_TESTS
+#    include "gpu_shader_test_info.hh"
+#  endif
 #endif
 
 #ifdef WITH_METAL_BACKEND

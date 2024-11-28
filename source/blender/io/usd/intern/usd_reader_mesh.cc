@@ -410,8 +410,7 @@ void USDMeshReader::process_normals_vertex_varying(Mesh *mesh)
   }
 
   BLI_STATIC_ASSERT(sizeof(normals_[0]) == sizeof(float3), "Expected float3 normals size");
-  bke::mesh_vert_normals_assign(
-      *mesh, Span(reinterpret_cast<const float3 *>(normals_.data()), int64_t(normals_.size())));
+  BKE_mesh_set_custom_normals_from_verts(mesh, reinterpret_cast<float(*)[3]>(normals_.data()));
 }
 
 void USDMeshReader::process_normals_face_varying(Mesh *mesh) const
@@ -756,9 +755,6 @@ Mesh *USDMeshReader::read_mesh(Mesh *existing_mesh,
    * the topology is consistent, as in the Alembic importer. */
 
   ImportSettings settings;
-  if (settings_) {
-    settings.validate_meshes = settings_->validate_meshes;
-  }
   settings.read_flag |= params.read_flags;
 
   if (topology_changed(existing_mesh, params.motion_sample_time)) {
@@ -785,7 +781,7 @@ Mesh *USDMeshReader::read_mesh(Mesh *existing_mesh,
     }
   }
 
-  if (settings.validate_meshes) {
+  if (import_params_.validate_meshes) {
     if (BKE_mesh_validate(active_mesh, false, false)) {
       BKE_reportf(reports(), RPT_INFO, "Fixed mesh for prim: %s", mesh_prim_.GetPath().GetText());
     }

@@ -76,6 +76,7 @@ Context::Context()
 Context::~Context()
 {
   GPU_matrix_state_discard(matrix_state);
+  GPU_BATCH_DISCARD_SAFE(polyline_batch);
   delete state_manager;
   delete front_left;
   delete back_left;
@@ -92,6 +93,22 @@ bool Context::is_active_on_thread()
 Context *Context::get()
 {
   return active_ctx;
+}
+
+Batch *Context::polyline_batch_get()
+{
+  if (polyline_batch) {
+    return polyline_batch;
+  }
+
+  /* TODO(fclem): get rid of this dummy VBO. */
+  GPUVertFormat format = {0};
+  GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
+  GPU_vertbuf_data_alloc(*vbo, 1);
+
+  polyline_batch = GPU_batch_create_ex(GPU_PRIM_TRIS, vbo, nullptr, GPU_BATCH_OWNS_VBO);
+  return polyline_batch;
 }
 
 }  // namespace blender::gpu
@@ -120,7 +137,6 @@ GPUContext *GPU_context_create(void *ghost_window, void *ghost_context)
 void GPU_context_discard(GPUContext *ctx_)
 {
   Context *ctx = unwrap(ctx_);
-  printf_end(ctx);
   delete ctx;
   active_ctx = nullptr;
 
@@ -140,7 +156,6 @@ void GPU_context_active_set(GPUContext *ctx_)
   Context *ctx = unwrap(ctx_);
 
   if (active_ctx) {
-    printf_end(active_ctx);
     active_ctx->deactivate();
   }
 
@@ -148,7 +163,6 @@ void GPU_context_active_set(GPUContext *ctx_)
 
   if (ctx) {
     ctx->activate();
-    printf_begin(ctx);
   }
 }
 
@@ -208,7 +222,6 @@ void GPU_render_begin()
    * but should be fixed for Metal. */
   if (backend) {
     backend->render_begin();
-    printf_end(active_ctx);
     printf_begin(active_ctx);
   }
 }
@@ -218,7 +231,6 @@ void GPU_render_end()
   BLI_assert(backend);
   if (backend) {
     printf_end(active_ctx);
-    printf_begin(active_ctx);
     backend->render_end();
   }
 }

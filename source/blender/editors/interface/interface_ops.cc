@@ -90,7 +90,7 @@ static void ui_region_redraw_immediately(bContext *C, ARegion *region)
   WM_draw_region_viewport_bind(region);
   ED_region_do_draw(C, region);
   WM_draw_region_viewport_unbind(region);
-  region->do_draw = 0;
+  region->runtime->do_draw = 0;
 }
 
 /** \} */
@@ -1677,7 +1677,7 @@ int paste_property_drivers(blender::Span<FCurve *> src_drivers,
      * quadratic complexity when the drivers are within the same ID, due to this
      * being inside of a loop and doing a linear scan of the drivers to find one
      * that matches.  We should be able to make this more efficient with a
-     * little cleverness .*/
+     * little cleverness. */
     if (driven) {
       FCurve *old_driver = BKE_fcurve_find(&dst_adt->drivers, dst_path->c_str(), dst_index);
       if (old_driver) {

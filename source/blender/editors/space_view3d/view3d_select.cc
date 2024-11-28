@@ -469,7 +469,7 @@ static bool view3d_selectable_data(bContext *C)
       return BKE_paint_select_elem_test(ob);
     }
     if (ob->mode & OB_MODE_WEIGHT_PAINT) {
-      return BKE_paint_select_elem_test(ob) && BKE_object_pose_armature_get_with_wpaint_check(ob);
+      return BKE_paint_select_elem_test(ob) || BKE_object_pose_armature_get_with_wpaint_check(ob);
     }
   }
 
@@ -3146,7 +3146,7 @@ static bool ed_curves_select_pick(bContext &C, const int mval[2], const SelectPi
         return new_closest;
       },
       [](const ClosestCurveDataBlock &a, const ClosestCurveDataBlock &b) {
-        return (a.elem.distance < b.elem.distance) ? a : b;
+        return (a.elem.distance_sq < b.elem.distance_sq) ? a : b;
       });
 
   std::atomic<bool> deselected = false;
@@ -3308,7 +3308,7 @@ static bool ed_grease_pencil_select_pick(bContext *C,
         return new_closest;
       },
       [](const ClosestGreasePencilDrawing &a, const ClosestGreasePencilDrawing &b) {
-        return (a.elem.distance < b.elem.distance) ? a : b;
+        return (a.elem.distance_sq < b.elem.distance_sq) ? a : b;
       });
 
   std::atomic<bool> deselected = false;
