@@ -598,20 +598,16 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
     print_resource_alias(ss, res);
   }
   ss << "\n/* Push Constants. */\n";
+  int location = 0;
   for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
+    ss << "layout( location = " << location << ") ";
     ss << "uniform " << to_string(uniform.type) << " " << uniform.name;
     if (uniform.array_size > 0) {
       ss << "[" << uniform.array_size << "]";
     }
     ss << ";\n";
+    location += std::max(1, uniform.array_size);
   }
-#if 0 /* #95278: This is not be enough to prevent some compilers think it is recursive. */
-  for (const ShaderCreateInfo::PushConst &uniform : info.push_constants_) {
-    /* #95278: Double macro to avoid some compilers think it is recursive. */
-    ss << "#define " << uniform.name << "_ " << uniform.name << "\n";
-    ss << "#define " << uniform.name << " (" << uniform.name << "_)\n";
-  }
-#endif
   ss << "\n";
   return ss.str();
 }
