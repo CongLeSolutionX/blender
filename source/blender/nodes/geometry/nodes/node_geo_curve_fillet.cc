@@ -16,21 +16,14 @@
 #include "node_geometry_util.hh"
 
 namespace blender::nodes::node_geo_curve_fillet_cc {
-
 NODE_STORAGE_FUNCS(NodeGeometryCurveFillet)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>("Curve").supported_type(
       {GeometryComponent::Type::Curve, GeometryComponent::Type::GreasePencil});
-  auto &count_input = b.add_input<decl::Int>("Count")
-                          .default_value(1)
-                          .min(1)
-                          .max(1000)
-                          .field_on_all()
-                          .make_available([](bNode &node) {
-                            node_storage(node).mode = GEO_NODE_CURVE_FILLET_POLY;
-                          });
+  b.add_input<decl::Int>("Count").default_value(1).min(1).max(1000).field_on_all().make_available(
+      [](bNode &node) { node_storage(node).mode = GEO_NODE_CURVE_FILLET_POLY; });
   b.add_input<decl::Float>("Radius")
       .min(0.0f)
       .max(FLT_MAX)
@@ -39,13 +32,9 @@ static void node_declare(NodeDeclarationBuilder &b)
       .field_on_all();
   b.add_input<decl::Bool>("Limit Radius")
       .description("Limit the maximum value of the radius in order to avoid overlapping fillets");
+  b.add_input<decl::Bool>("Remove Zero-length Edges")
+      .description("When limit radius is enabled, remove the duplicated points at limited radius");
   b.add_output<decl::Geometry>("Curve").propagate_all();
-
-  const bNode *node = b.node_or_null();
-  if (node != nullptr) {
-    const NodeGeometryCurveFillet &storage = node_storage(*node);
-    count_input.available(GeometryNodeCurveFilletMode(storage.mode) == GEO_NODE_CURVE_FILLET_POLY);
-  }
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -60,13 +49,22 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   node->storage = data;
 }
 
+static void node_update(bNodeTree *ntree, bNode *node)
+{
+  const NodeGeometryCurveFillet &storage = node_storage(*node);
+  const GeometryNodeCurveFilletMode mode = (GeometryNodeCurveFilletMode)storage.mode;
+  bNodeSocket *poly_socket = static_cast<bNodeSocket *>(node->inputs.first)->next;
+  bke::nodeSetSocketAvailability(ntree, poly_socket, mode == GEO_NODE_CURVE_FILLET_POLY);
+}
+
 static bke::CurvesGeometry fillet_curve(const bke::CurvesGeometry &src_curves,
                                         const GeometryNodeCurveFilletMode mode,
                                         const fn::FieldContext &field_context,
                                         const std::optional<Field<int>> &count_field,
                                         const Field<float> &radius_field,
                                         const bool limit_radius,
-                                        const AttributeFilter &attribute_filter)
+                                        const bool remove_zero_length_edges,
+                                        const AnonymousAttributePropagationInfo &propagation_info)
 {
   fn::FieldEvaluator evaluator{field_context, src_curves.points_num()};
   evaluator.add(radius_field);
@@ -78,7 +76,8 @@ static bke::CurvesGeometry fillet_curve(const bke::CurvesGeometry &src_curves,
                                             src_curves.curves_range(),
                                             evaluator.get_evaluated<float>(0),
                                             limit_radius,
-                                            attribute_filter);
+                                            remove_zero_length_edges,
+                                            propagation_info);
     }
     case GEO_NODE_CURVE_FILLET_POLY: {
       evaluator.add(*count_field);
@@ -88,7 +87,8 @@ static bke::CurvesGeometry fillet_curve(const bke::CurvesGeometry &src_curves,
                                           evaluator.get_evaluated<float>(0),
                                           evaluator.get_evaluated<int>(1),
                                           limit_radius,
-                                          attribute_filter);
+                                          remove_zero_length_edges,
+                                          propagation_info);
     }
   }
   return bke::CurvesGeometry();
@@ -99,11 +99,12 @@ static void fillet_grease_pencil(GreasePencil &grease_pencil,
                                  const std::optional<Field<int>> &count_field,
                                  const Field<float> &radius_field,
                                  const bool limit_radius,
-                                 const AttributeFilter &attribute_filter)
+                                 const bool remove_zero_length_edges,
+                                 const AnonymousAttributePropagationInfo &propagation_info)
 {
   using namespace blender::bke::greasepencil;
   for (const int layer_index : grease_pencil.layers().index_range()) {
-    Drawing *drawing = grease_pencil.get_eval_drawing(grease_pencil.layer(layer_index));
+    Drawing *drawing = get_eval_grease_pencil_layer_drawing_for_write(grease_pencil, layer_index);
     if (drawing == nullptr) {
       continue;
     }
@@ -119,7 +120,8 @@ static void fillet_grease_pencil(GreasePencil &grease_pencil,
                                                   count_field,
                                                   radius_field,
                                                   limit_radius,
-                                                  attribute_filter);
+                                                  remove_zero_length_edges,
+                                                  propagation_info);
     drawing->strokes_for_write() = std::move(dst_curves);
     drawing->tag_topology_changed();
   }
@@ -134,34 +136,42 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   Field<float> radius_field = params.extract_input<Field<float>>("Radius");
   const bool limit_radius = params.extract_input<bool>("Limit Radius");
+  const bool remove_zero_length_edges = params.extract_input<bool>("Remove Zero-length Edges");
 
   std::optional<Field<int>> count_field;
   if (mode == GEO_NODE_CURVE_FILLET_POLY) {
     count_field.emplace(params.extract_input<Field<int>>("Count"));
   }
 
-  const NodeAttributeFilter &attribute_filter = params.get_attribute_filter("Curve");
+  const AnonymousAttributePropagationInfo &propagation_info = params.get_output_propagation_info(
+      "Curve");
 
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
     if (geometry_set.has_curves()) {
       const Curves &curves_id = *geometry_set.get_curves();
       const bke::CurvesGeometry &src_curves = curves_id.geometry.wrap();
-      const bke::CurvesFieldContext field_context{curves_id, AttrDomain::Point};
+      const bke::CurvesFieldContext field_context{src_curves, AttrDomain::Point};
       bke::CurvesGeometry dst_curves = fillet_curve(src_curves,
                                                     mode,
                                                     field_context,
                                                     count_field,
                                                     radius_field,
                                                     limit_radius,
-                                                    attribute_filter);
+                                                    remove_zero_length_edges,
+                                                    propagation_info);
       Curves *dst_curves_id = bke::curves_new_nomain(std::move(dst_curves));
       bke::curves_copy_parameters(curves_id, *dst_curves_id);
       geometry_set.replace_curves(dst_curves_id);
     }
     if (geometry_set.has_grease_pencil()) {
       GreasePencil &grease_pencil = *geometry_set.get_grease_pencil_for_write();
-      fillet_grease_pencil(
-          grease_pencil, mode, count_field, radius_field, limit_radius, attribute_filter);
+      fillet_grease_pencil(grease_pencil,
+                           mode,
+                           count_field,
+                           radius_field,
+                           limit_radius,
+                           remove_zero_length_edges,
+                           propagation_info);
     }
   });
 
@@ -171,18 +181,18 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_rna(StructRNA *srna)
 {
   static EnumPropertyItem mode_items[] = {
-      {GEO_NODE_CURVE_FILLET_BEZIER,
-       "BEZIER",
-       0,
-       "Bézier",
-       "Align Bézier handles to create circular arcs at each control point"},
-      {GEO_NODE_CURVE_FILLET_POLY,
-       "POLY",
-       0,
-       "Poly",
-       "Add control points along a circular arc (handle type is vector if Bézier Spline)"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
+                                          {GEO_NODE_CURVE_FILLET_BEZIER,
+                                           "BEZIER",
+                                           0,
+                                           "Bézier",
+                                           "Align Bézier handles to create circular arcs at each control point"},
+                                          {GEO_NODE_CURVE_FILLET_POLY,
+                                           "POLY",
+                                           0,
+                                           "Poly",
+                                           "Add control points along a circular arc (handle type is vector if Bézier Spline)"},
+                                          {0, nullptr, 0, nullptr, nullptr},
+                                          };
 
   RNA_def_node_enum(srna,
                     "mode",
@@ -195,19 +205,19 @@ static void node_rna(StructRNA *srna)
 
 static void node_register()
 {
-  static blender::bke::bNodeType ntype;
+  static bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_FILLET_CURVE, "Fillet Curve", NODE_CLASS_GEOMETRY);
   ntype.draw_buttons = node_layout;
-  blender::bke::node_type_storage(
+  node_type_storage(
       &ntype, "NodeGeometryCurveFillet", node_free_standard_storage, node_copy_standard_storage);
   ntype.declare = node_declare;
   ntype.initfunc = node_init;
+  ntype.updatefunc = node_update;
   ntype.geometry_node_execute = node_geo_exec;
-  blender::bke::node_register_type(&ntype);
+  nodeRegisterType(&ntype);
 
   node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
-
 }  // namespace blender::nodes::node_geo_curve_fillet_cc
