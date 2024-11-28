@@ -10,6 +10,8 @@
 #include "vk_render_graph.hh"
 #include "vk_to_string.hh"
 
+#include <sstream>
+
 namespace blender::gpu::render_graph {
 
 VKCommandBuilder::VKCommandBuilder()
@@ -93,8 +95,9 @@ void VKCommandBuilder::build_node_group(VKRenderGraph &render_graph,
   for (NodeHandle node_handle : node_group) {
     VKRenderGraphNode &node = render_graph.nodes_[node_handle];
 #if 0
-    std::cout << "node_group: " << node_group.first() << "-" << node_group.last()
-              << ", node_handle: " << node_handle << ", node_type: " << node.type << "\n";
+    std::cout << "node_group=" << node_group.first() << "-" << node_group.last()
+              << ", node_handle=" << node_handle << ", node_type=" << node.type
+              << ", debug_group=" << full_debug_group(render_graph, node_handle) << "\n";
 #endif
 #if 0
     render_graph.debug_print(node_handle);
@@ -142,13 +145,15 @@ void VKCommandBuilder::build_node_group(VKRenderGraph &render_graph,
         is_rendering = true;
       }
     }
-#if 0
-    std::cout << "node_group: " << node_group.first() << "-" << node_group.last()
-              << ", node_handle: " << node_handle << ", node_type: " << node.type << "\n";
-#endif
     if (G.debug & G_DEBUG_GPU) {
       activate_debug_group(render_graph, command_buffer, node_handle);
     }
+#if 0
+    std::cout << "node_group=" << node_group.first() << "-" << node_group.last()
+              << ", node_handle=" << node_handle << ", node_type=" << node.type
+              << ", debug group=" << full_debug_group(render_graph, node_handle) << "\n";
+
+#endif
     node.build_commands(command_buffer, state_.active_pipelines);
 
     /* When layered image has different layouts we reset the layouts to
@@ -229,6 +234,25 @@ void VKCommandBuilder::activate_debug_group(VKRenderGraph &render_graph,
 
   state_.debug_level += num_begins;
   state_.active_debug_group_id = debug_group;
+}
+
+std::string VKCommandBuilder::full_debug_group(VKRenderGraph &render_graph,
+                                               NodeHandle node_handle) const
+{
+  VKRenderGraph::DebugGroupID debug_group = render_graph.debug_.node_group_map[node_handle];
+  if (debug_group == -1) {
+    return std::string();
+  }
+
+  std::stringstream ss;
+  for (const VKRenderGraph::DebugGroupNameID &name_id :
+       render_graph.debug_.used_groups[debug_group])
+  {
+    ss << "/";
+    ss << render_graph.debug_.group_names[name_id];
+  }
+
+  return ss.str();
 }
 
 void VKCommandBuilder::finish_debug_groups(VKCommandBufferInterface &command_buffer)
