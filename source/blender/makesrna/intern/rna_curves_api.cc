@@ -24,8 +24,6 @@
 
 #  include "ED_curves.hh"
 
-#  include "GEO_reorder.hh"
-
 #  include "rna_curves_utils.hh"
 
 /* Common `CurvesGeometry` API functions. */
@@ -147,7 +145,7 @@ bool rna_CurvesGeometry_reorder_curves(blender::bke::CurvesGeometry &curves,
     BKE_report(reports, RPT_ERROR, "Reorder indices must not have duplicates");
     return false;
   }
-  curves = geometry::reorder_curves_geometry(curves, new_to_old_indices_map, {});
+  ed::curves::reorder_curves(curves, new_to_old_indices_map);
   return true;
 }
 
