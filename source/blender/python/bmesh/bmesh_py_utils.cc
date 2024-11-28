@@ -534,6 +534,124 @@ static PyObject *bpy_bm_utils_face_split(PyObject * /*self*/, PyObject *args, Py
 
 PyDoc_STRVAR(
     /* Wrap. */
+    bpy_bm_utils_insert_edge_doc,
+    ".. method:: face_split(vert_a, face_a, vert_b, face b, coords=(), use_exist=True, example=None)\n"
+    "\n"
+    "   Face split with optional intermediate points.\n"
+    "\n"
+    "   :arg face: The face to cut.\n"
+    "   :type face: :class:`bmesh.types.BMFace`\n"
+    "   :arg vert_a: First vertex to cut in the face (face must contain the vert).\n"
+    "   :type vert_a: :class:`bmesh.types.BMVert`\n"
+    "   :arg vert_b: Second vertex to cut in the face (face must contain the vert).\n"
+    "   :type vert_b: :class:`bmesh.types.BMVert`\n"
+    "   :arg coords: Optional sequence of 3D points in between *vert_a* and *vert_b*.\n"
+    "   :type coords: Sequence[Sequence[float]]\n"
+    "   :arg use_exist: .Use an existing edge if it exists (Only used when *coords* argument is "
+    "empty or omitted)\n"
+    "   :type use_exist: bool\n"
+    "   :arg example: Newly created edge will copy settings from this one.\n"
+    "   :type example: :class:`bmesh.types.BMEdge`\n"
+    "   :return: The newly created face or None on failure.\n"
+    "   :rtype: tuple[:class:`bmesh.types.BMFace`, :class:`bmesh.types.BMLoop`]\n");
+static PyObject *bpy_bm_utils_insert_edge(PyObject * /*self*/, PyObject *args, PyObject *kw)
+{
+  static const char *kwlist[] = {
+      "vert_a", "face_a", "vert_b", "face_b", "coords", "use_exist", "example", nullptr};
+
+  BPy_BMFace *py_face_a;
+  BPy_BMFace *py_face_b;
+  BPy_BMVert *py_vert_a;
+  BPy_BMVert *py_vert_b;
+
+  /* optional */
+  PyObject *py_coords = nullptr;
+  bool edge_exists = true;
+  BPy_BMEdge *py_edge_example = nullptr;
+
+  float *coords;
+  int ncoords = 0;
+
+  BMesh *bm;
+  BMEdge *e_new = nullptr;
+  BMLoop *l_new = nullptr;
+  BMLoop *l_a, *l_b;
+
+  if (!PyArg_ParseTupleAndKeywords(args,
+                                   kw,
+                                   "O!O!O!O!|$OO&O!:insert_edge",
+                                   (char **)kwlist,
+                                   &BPy_BMVert_Type,
+                                   &py_vert_a,
+                                   &BPy_BMFace_Type,
+                                   &py_face_a,
+                                   &BPy_BMVert_Type,
+                                   &py_vert_b,
+                                   &BPy_BMFace_Type,
+                                   &py_face_b,
+                                   &py_coords,
+                                   PyC_ParseBool,
+                                   &edge_exists,
+                                   &BPy_BMEdge_Type,
+                                   &py_edge_example))
+  {
+    return nullptr;
+  }
+
+  BPY_BM_CHECK_OBJ(py_face_a);
+  BPY_BM_CHECK_OBJ(py_face_b);
+  BPY_BM_CHECK_OBJ(py_vert_a);
+  BPY_BM_CHECK_OBJ(py_vert_b);
+
+  if (py_edge_example) {
+    BPY_BM_CHECK_OBJ(py_edge_example);
+  }
+
+  /* this doubles for checking that the verts are in the same mesh */
+  if ((l_a = BM_face_vert_share_loop(py_face_a->f, py_vert_a->v)) &&
+      (l_b = BM_face_vert_share_loop(py_face_b->f, py_vert_b->v)))
+  {
+    /* pass */
+  }
+  else {
+    PyErr_SetString(PyExc_ValueError,
+                    "insert_edge(...): one of the verts passed is not found in the face");
+    return nullptr;
+  }
+
+  if ((py_face_a->f == py_face_b->f) && (py_vert_a->v == py_vert_b->v)) {
+    PyErr_SetString(PyExc_ValueError, "insert_edge(...): corners should be different");
+    return nullptr;
+  }
+
+  if (py_coords) {
+    ncoords = mathutils_array_parse_alloc_v(&coords, 3, py_coords, "face_split(...): ");
+    if (ncoords == -1) {
+      return nullptr;
+    }
+  }
+
+  /* --- main function body --- */
+  bm = py_face_a->bm;
+  
+  e_new = BM_insert_edge(bm,
+                        l_a,
+                        l_b,
+                        &l_new);
+
+  if (e_new && l_new) {
+    PyObject *ret = PyTuple_New(2);
+    PyTuple_SET_ITEMS(
+        ret, BPy_BMEdge_CreatePyObject(bm, e_new), BPy_BMLoop_CreatePyObject(bm, l_new));
+    return ret;
+  }
+
+  PyErr_SetString(PyExc_ValueError, "insert_edge(...): couldn't insert edge, internal error");
+  return nullptr;
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
     bpy_bm_utils_face_split_edgenet_doc,
     ".. method:: face_split_edgenet(face, edgenet)\n"
     "\n"
@@ -820,6 +938,10 @@ static PyMethodDef BPy_BM_utils_methods[] = {
      (PyCFunction)bpy_bm_utils_face_split,
      METH_VARARGS | METH_KEYWORDS,
      bpy_bm_utils_face_split_doc},
+    {"insert_edge",
+     (PyCFunction)bpy_bm_utils_insert_edge,
+     METH_VARARGS | METH_KEYWORDS,
+     bpy_bm_utils_insert_edge_doc},
     {"face_split_edgenet",
      (PyCFunction)bpy_bm_utils_face_split_edgenet,
      METH_VARARGS | METH_KEYWORDS,
